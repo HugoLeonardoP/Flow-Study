@@ -1,8 +1,8 @@
-# Proposta de Aplicativo — StudyFLow
+# Proposta de Aplicativo — FlowStudy
 ### Organizador de Estudos (Pomodoro + Revisão Espaçada)
 
 ## 1. Nome da aplicação
-StudyFLow
+FlowStudy
 
 ## 2. Problema que a aplicação pretende resolver
 Estudantes frequentemente têm dificuldade em manter o foco durante sessões de estudo e em saber quando revisar o conteúdo já estudado antes de esquecê-lo. A falta de gestão do tempo de estudo e de um sistema de revisão estruturado leva a baixa retenção de conteúdo e procrastinação.
