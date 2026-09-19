@@ -26,7 +26,10 @@ evitar conflitos de peer dependency.
 - **Paleta**: papel neutro (`#F7F4EC`) como base, verde-sálvia como cor de
   marca, âmbar para o ciclo de foco do Pomodoro e azul-céu para o descanso.
   Evita deliberadamente o terracota/creme e o kit de cards genérico com
-  sombra cinza uniforme.
+  sombra cinza uniforme. As cores de texto (`inkFaint`, `amberDark`,
+  `skyDark`, `rustDark`, `goldDark`, `borderStrong`) foram calibradas para
+  atingir contraste mínimo de 4,5:1 (texto) e 3:1 (bordas de componentes),
+  conforme WCAG — ver `etapa-03.md` para o detalhamento.
 - **Tipografia**: Fraunces (serifada, com peso editorial) para títulos e o
   número do timer; Inter para texto de interface. Carregadas via
   `@expo-google-fonts` em `App.tsx`.

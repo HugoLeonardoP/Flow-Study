@@ -62,7 +62,9 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
           </View>
           <Pressable
             onPress={() => navigation.navigate('MateriaForm', { materiaId: materia.id })}
-            style={styles.editarBotao}
+            accessibilityRole="button"
+            accessibilityLabel={`Editar ${materia.nome}`}
+            style={({ pressed }) => [styles.editarBotao, pressed && styles.editarBotaoPressed]}
           >
             <Ionicons name="pencil-outline" size={18} color={colors.sage} />
           </Pressable>
@@ -141,12 +143,15 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   editarBotao: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.sageLight,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  editarBotaoPressed: {
+    backgroundColor: colors.border,
   },
   resumoRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
   resumoCard: {

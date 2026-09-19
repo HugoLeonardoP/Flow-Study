@@ -21,6 +21,7 @@ export function TimerCircular({ progresso, tempoLabel, tipo, size = 260 }: Props
 
   const corAtiva = tipo === 'foco' ? colors.amber : colors.sky;
   const corTrilha = tipo === 'foco' ? colors.amberSoft : colors.skySoft;
+  const corTexto = tipo === 'foco' ? colors.amberDark : colors.skyDark;
 
   useEffect(() => {
     Animated.timing(anim, {
@@ -37,7 +38,12 @@ export function TimerCircular({ progresso, tempoLabel, tipo, size = 260 }: Props
   });
 
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={`${tempoLabel} restantes, ${tipo === 'foco' ? 'tempo de foco' : 'tempo de descanso'}`}
+    >
       <Svg width={size} height={size}>
         <Circle
           cx={size / 2}
@@ -64,7 +70,7 @@ export function TimerCircular({ progresso, tempoLabel, tipo, size = 260 }: Props
       </Svg>
       <View style={styles.centro}>
         <Text style={styles.tempo}>{tempoLabel}</Text>
-        <Text style={[styles.rotulo, { color: corAtiva }]}>
+        <Text style={[styles.rotulo, { color: corTexto }]}>
           {tipo === 'foco' ? 'Tempo de foco' : 'Tempo de descanso'}
         </Text>
       </View>

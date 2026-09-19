@@ -29,5 +29,5 @@ export const type = {
   subtitle: { fontSize: 17, lineHeight: 23, letterSpacing: 0 },
   body: { fontSize: 15, lineHeight: 21, letterSpacing: 0 },
   bodySmall: { fontSize: 13, lineHeight: 18, letterSpacing: 0 },
-  caption: { fontSize: 11, lineHeight: 15, letterSpacing: 0.2 },
+  caption: { fontSize: 12, lineHeight: 16, letterSpacing: 0.2 },
 };

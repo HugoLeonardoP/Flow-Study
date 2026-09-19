@@ -25,6 +25,8 @@ export function CardMateria({ materia, onPress, subtitulo }: Props) {
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Ver detalhes de ${materia.nome}, categoria ${materia.categoria}`}
       style={({ pressed }) => [styles.card, shadow.card, pressed && styles.pressed]}
     >
       <View style={[styles.faixa, { backgroundColor: materia.cor }]} />

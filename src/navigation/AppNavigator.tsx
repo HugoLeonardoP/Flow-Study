@@ -2,6 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies } from '@/theme';
 
@@ -60,6 +61,11 @@ function HomeStackNavigator() {
 }
 
 export function AppNavigator() {
+  
+  const insets = useSafeAreaInsets();
+  const espacoInferior = Math.max(insets.bottom, 8);
+  const alturaBarraAbas = 56 + espacoInferior;
+
   return (
     <NavigationContainer>
       <Tab.Navigator
@@ -70,9 +76,9 @@ export function AppNavigator() {
           tabBarStyle: {
             backgroundColor: colors.paperRaised,
             borderTopColor: colors.border,
-            height: 62,
-            paddingBottom: 8,
+            height: alturaBarraAbas,
             paddingTop: 8,
+            paddingBottom: espacoInferior,
           },
           tabBarLabelStyle: { fontFamily: fontFamilies.bodyMedium, fontSize: 11 },
           tabBarIcon: ({ color, size }) => {

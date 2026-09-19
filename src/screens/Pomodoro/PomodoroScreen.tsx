@@ -144,12 +144,22 @@ export function PomodoroScreen({ route, navigation }: Props) {
         </View>
 
         <View style={styles.controles}>
-          <Pressable onPress={pularCiclo} style={styles.controleSecundario}>
+          <Pressable
+            onPress={pularCiclo}
+            accessibilityRole="button"
+            accessibilityLabel="Pular ciclo"
+            style={({ pressed }) => [styles.controleSecundario, pressed && styles.controleSecundarioPressed]}
+          >
             <Ionicons name="play-skip-forward" size={22} color={colors.inkSoft} />
           </Pressable>
 
-          <Pressable onPress={alternarPlayPausa} style={styles.controlePrincipal}>
-            <Ionicons name={rodando ? 'pause' : 'play'} size={30} color={colors.white} />
+          <Pressable
+            onPress={alternarPlayPausa}
+            accessibilityRole="button"
+            accessibilityLabel={rodando ? 'Pausar' : 'Iniciar'}
+            style={({ pressed }) => [styles.controlePrincipal, pressed && styles.controlePrincipalPressed]}
+          >
+            <Ionicons name={rodando ? 'pause' : 'play'} size={30} color={colors.ink} />
           </Pressable>
 
           <View style={{ width: 48 }} />
@@ -191,6 +201,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  controleSecundarioPressed: {
+    backgroundColor: colors.border,
+  },
   controlePrincipal: {
     width: 76,
     height: 76,
@@ -198,5 +211,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.amber,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  controlePrincipalPressed: {
+    backgroundColor: colors.amberDark,
+    transform: [{ scale: 0.96 }],
   },
 });

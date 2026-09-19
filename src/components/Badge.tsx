@@ -7,12 +7,13 @@ interface Props {
   tone?: 'sage' | 'amber' | 'sky' | 'rust' | 'gold' | 'neutral';
 }
 
+
 const toneMap: Record<string, { bg: string; fg: string }> = {
   sage: { bg: colors.sageLight, fg: colors.sageDark },
   amber: { bg: colors.amberSoft, fg: colors.amberDark },
-  sky: { bg: colors.skySoft, fg: colors.sky },
-  rust: { bg: colors.rustSoft, fg: colors.rust },
-  gold: { bg: colors.goldSoft, fg: colors.gold },
+  sky: { bg: colors.skySoft, fg: colors.skyDark },
+  rust: { bg: colors.rustSoft, fg: colors.rustDark },
+  gold: { bg: colors.goldSoft, fg: colors.goldDark },
   neutral: { bg: colors.border, fg: colors.inkSoft },
 };
 

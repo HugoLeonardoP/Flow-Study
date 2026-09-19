@@ -36,6 +36,8 @@ export function ItemRevisaoCard({ item, materia, onAvaliar }: Props) {
     <>
       <Pressable
         onPress={() => setModalAberto(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Avaliar revisão: ${item.tema}, ${materia?.nome ?? 'matéria'}`}
         style={({ pressed }) => [styles.card, shadow.card, pressed && styles.pressed]}
       >
         <View style={[styles.ponto, { backgroundColor: materia?.cor ?? colors.inkFaint }]} />
@@ -52,16 +54,32 @@ export function ItemRevisaoCard({ item, materia, onAvaliar }: Props) {
         <Pressable style={styles.overlay} onPress={() => setModalAberto(false)}>
           <Pressable style={styles.folha} onPress={(e) => e.stopPropagation()}>
             <View style={styles.alcinha} />
-            <Text style={styles.folhaTitulo}>{item.tema}</Text>
+
+            <View style={styles.folhaHeader}>
+              <Text style={styles.folhaTitulo} numberOfLines={2}>
+                {item.tema}
+              </Text>
+              <Pressable
+                onPress={() => setModalAberto(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Fechar"
+                hitSlop={8}
+                style={({ pressed }) => [styles.fecharBotao, pressed && styles.fecharBotaoPressed]}
+              >
+                <Ionicons name="close" size={20} color={colors.inkSoft} />
+              </Pressable>
+            </View>
             <Text style={styles.folhaSubtitulo}>Como foi lembrar deste conteúdo?</Text>
 
             {opcoes.map((op) => (
               <Pressable
                 key={op.nivel}
                 onPress={() => handleEscolher(op.nivel)}
+                accessibilityRole="button"
+                accessibilityLabel={op.label}
                 style={({ pressed }) => [
                   styles.opcao,
-                  { borderColor: colors.border },
+                  { borderColor: colors.borderStrong },
                   pressed && { backgroundColor: colors.paper },
                 ]}
               >
@@ -70,6 +88,15 @@ export function ItemRevisaoCard({ item, materia, onAvaliar }: Props) {
                 <Ionicons name="chevron-forward" size={16} color={colors.inkFaint} />
               </Pressable>
             ))}
+
+            <Pressable
+              onPress={() => setModalAberto(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancelar avaliação"
+              style={({ pressed }) => [styles.cancelar, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={styles.cancelarLabel}>Cancelar</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -129,11 +156,41 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: spacing.md,
   },
+  folhaHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   folhaTitulo: {
+    flex: 1,
     fontFamily: fontFamilies.display,
     fontSize: type.title.fontSize,
     color: colors.ink,
     marginBottom: spacing.xxs,
+  },
+  fecharBotao: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -spacing.xs,
+    marginRight: -spacing.xs,
+  },
+  fecharBotaoPressed: {
+    backgroundColor: colors.paper,
+  },
+  cancelar: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+  },
+  cancelarLabel: {
+    fontFamily: fontFamilies.bodyMedium,
+    fontSize: type.body.fontSize,
+    color: colors.inkSoft,
   },
   folhaSubtitulo: {
     fontFamily: fontFamilies.body,

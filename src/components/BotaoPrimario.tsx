@@ -18,6 +18,12 @@ const backgroundByVariant = {
   ink: colors.ink,
 };
 
+const labelColorByVariant = {
+  sage: colors.white,
+  amber: colors.ink,
+  ink: colors.white,
+};
+
 export function BotaoPrimario({
   label,
   onPress,
@@ -27,10 +33,15 @@ export function BotaoPrimario({
   style,
   icon,
 }: Props) {
+  const corTexto = labelColorByVariant[variant];
+
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled || loading }}
       style={({ pressed }) => [
         styles.base,
         { backgroundColor: backgroundByVariant[variant] },
@@ -39,11 +50,13 @@ export function BotaoPrimario({
         style,
       ]}
     >
-      {icon}
+      {icon && React.isValidElement(icon)
+        ? React.cloneElement(icon as React.ReactElement<{ color?: string }>, { color: corTexto })
+        : icon}
       {loading ? (
-        <ActivityIndicator color={colors.white} />
+        <ActivityIndicator color={corTexto} />
       ) : (
-        <Text style={styles.label}>{label}</Text>
+        <Text style={[styles.label, { color: corTexto }]}>{label}</Text>
       )}
     </Pressable>
   );
@@ -67,7 +80,6 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   label: {
-    color: colors.white,
     fontFamily: fontFamilies.bodySemiBold,
     fontSize: type.subtitle.fontSize,
   },

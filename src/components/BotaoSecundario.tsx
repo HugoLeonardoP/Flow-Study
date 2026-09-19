@@ -10,18 +10,22 @@ interface Props {
 }
 
 export function BotaoSecundario({ label, onPress, style, tone = 'ink' }: Props) {
-  const color = tone === 'rust' ? colors.rust : colors.ink;
+
+  const corBorda = tone === 'rust' ? colors.rust : colors.ink;
+  const corTexto = tone === 'rust' ? colors.rustDark : colors.ink;
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => [
         styles.base,
-        { borderColor: color },
+        { borderColor: corBorda },
         pressed && { backgroundColor: colors.paper },
         style,
       ]}
     >
-      <Text style={[styles.label, { color }]}>{label}</Text>
+      <Text style={[styles.label, { color: corTexto }]}>{label}</Text>
     </Pressable>
   );
 }
