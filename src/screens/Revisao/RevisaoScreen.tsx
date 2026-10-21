@@ -1,29 +1,19 @@
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 import { ItemRevisaoCard } from '@/components/ItemRevisaoCard';
 import { colors, fontFamilies, spacing, type } from '@/theme';
-import { getRevisoesDoDia, avaliarItemRevisao, getMateriaById } from '@/mocks/data';
-import { ItemRevisao, NivelLembranca } from '@/types';
+import { useDados, getRevisoesDoDia, avaliarItemRevisao, getMateriaById } from '@/services/dataService';
+import { NivelLembranca } from '@/types';
 
 export function RevisaoScreen() {
-  const [itens, setItens] = useState<ItemRevisao[]>([]);
-
-  const carregar = useCallback(() => {
-    setItens(getRevisoesDoDia());
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      carregar();
-    }, [carregar])
-  );
+  // Re-renderiza sempre que os dados persistidos mudam (inclusive após avaliar).
+  useDados();
+  const itens = getRevisoesDoDia();
 
   function handleAvaliar(id: string, nivel: NivelLembranca) {
     avaliarItemRevisao(id, nivel);
-    carregar();
   }
 
   return (

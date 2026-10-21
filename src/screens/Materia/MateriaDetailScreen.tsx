@@ -1,53 +1,96 @@
-import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { HomeStackParamList } from '@/navigation/AppNavigator';
 import { BotaoPrimario } from '@/components/BotaoPrimario';
+import { BotaoSecundario } from '@/components/BotaoSecundario';
 import { Badge } from '@/components/Badge';
+import { RevisaoFormModal } from '@/components/RevisaoFormModal';
 import { colors, fontFamilies, spacing, type, radius, shadow } from '@/theme';
 import {
+  useDados,
   getMateriaById,
   getHistoricoSessoes,
   getRevisoesDaMateria,
-} from '@/mocks/data';
-import { ItemRevisao, SessaoPomodoro } from '@/types';
+  criarItemRevisao,
+  atualizarTemaItemRevisao,
+  removerItemRevisao,
+  removerMateria,
+  foiAvaliadoHoje,
+} from '@/services/dataService';
+import { ItemRevisao } from '@/types';
+import { formatarDataCurta, formatarDataHora } from '@/utils/datas';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'MateriaDetail'>;
 
-function formatarDataHora(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-}
+const LIMITE_HISTORICO = 10;
 
 export function MateriaDetailScreen({ route, navigation }: Props) {
+  // Re-renderiza sempre que os dados persistidos mudam.
+  useDados();
+
   const { materiaId } = route.params;
   const materia = getMateriaById(materiaId);
 
-  const [historico, setHistorico] = useState<SessaoPomodoro[]>([]);
-  const [revisoes, setRevisoes] = useState<ItemRevisao[]>([]);
+  const [removida, setRemovida] = useState(false);
+  const [modalCriarAberto, setModalCriarAberto] = useState(false);
+  const [itemEmEdicao, setItemEmEdicao] = useState<ItemRevisao | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      setHistorico(getHistoricoSessoes(materiaId));
-      setRevisoes(getRevisoesDaMateria(materiaId));
-      navigation.setOptions({ title: materia?.nome ?? 'Matéria' });
-    }, [materiaId])
-  );
+  useEffect(() => {
+    if (materia) navigation.setOptions({ title: materia.nome });
+  }, [materia?.nome, navigation]);
 
-  if (!materia) {
+  if (removida || !materia) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.vazio}>
-          <Text style={styles.vazioTexto}>Matéria não encontrada.</Text>
+          {!removida && <Text style={styles.vazioTexto}>Matéria não encontrada.</Text>}
         </View>
       </SafeAreaView>
     );
   }
 
+  const historico = getHistoricoSessoes(materiaId);
+  const revisoes = getRevisoesDaMateria(materiaId);
   const totalMinutos = historico.reduce((acc, s) => acc + s.duracaoMin, 0);
+
+  function confirmarExclusaoMateria() {
+    if (!materia) return;
+    Alert.alert(
+      'Excluir matéria?',
+      `“${materia.nome}”, o histórico de sessões e todos os itens de revisão dela serão apagados. Esta ação não pode ser desfeita.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: () => {
+            setRemovida(true);
+            navigation.goBack();
+            removerMateria(materia.id);
+          },
+        },
+      ]
+    );
+  }
+
+  function confirmarExclusaoItem() {
+    if (!itemEmEdicao) return;
+    const item = itemEmEdicao;
+    Alert.alert('Excluir item de revisão?', `“${item.tema}” será removido.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: () => {
+          removerItemRevisao(item.id);
+          setItemEmEdicao(null);
+        },
+      },
+    ]);
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -93,34 +136,90 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
         {historico.length === 0 ? (
           <Text style={styles.listaVazia}>Nenhuma sessão registrada ainda.</Text>
         ) : (
-          historico.map((s) => (
-            <View key={s.id} style={styles.linhaHistorico}>
-              <Ionicons name="flame-outline" size={16} color={colors.amberDark} />
-              <Text style={styles.linhaHistoricoTexto}>
-                {s.duracaoMin} min de foco · {formatarDataHora(s.inicio)}
+          <>
+            {historico.slice(0, LIMITE_HISTORICO).map((s) => (
+              <View key={s.id} style={styles.linhaHistorico}>
+                <Ionicons name="flame-outline" size={16} color={colors.amberDark} />
+                <Text style={styles.linhaHistoricoTexto}>
+                  {s.duracaoMin} min de foco · {formatarDataHora(s.inicio)}
+                </Text>
+              </View>
+            ))}
+            {historico.length > LIMITE_HISTORICO && (
+              <Text style={styles.notaHistorico}>
+                Mostrando as {LIMITE_HISTORICO} sessões mais recentes de {historico.length}.
               </Text>
-            </View>
-          ))
+            )}
+          </>
         )}
 
-        <Text style={styles.secaoTitulo}>Itens de revisão</Text>
+        <View style={styles.secaoHeader}>
+          <Text style={[styles.secaoTitulo, { marginTop: 0, marginBottom: 0 }]}>Itens de revisão</Text>
+          <Pressable
+            onPress={() => setModalCriarAberto(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Adicionar item de revisão"
+            hitSlop={8}
+            style={({ pressed }) => [styles.adicionarBotao, pressed && styles.adicionarBotaoPressed]}
+          >
+            <Ionicons name="add" size={18} color={colors.sage} />
+            <Text style={styles.adicionarLabel}>Adicionar</Text>
+          </Pressable>
+        </View>
         {revisoes.length === 0 ? (
-          <Text style={styles.listaVazia}>Nenhum item de revisão associado.</Text>
+          <Text style={styles.listaVazia}>
+            Nenhum item de revisão ainda. Toque em “Adicionar” para registrar um tema estudado.
+          </Text>
         ) : (
           revisoes.map((r) => (
-            <View key={r.id} style={[styles.itemRevisao, shadow.card]}>
+            <Pressable
+              key={r.id}
+              onPress={() => setItemEmEdicao(r)}
+              accessibilityRole="button"
+              accessibilityLabel={`Editar item de revisão: ${r.tema}`}
+              style={({ pressed }) => [styles.itemRevisao, shadow.card, pressed && styles.itemRevisaoPressed]}
+            >
               <Text style={styles.itemRevisaoTema} numberOfLines={1}>
                 {r.tema}
               </Text>
-              {r.concluidaHoje ? (
+              {foiAvaliadoHoje(r) ? (
                 <Badge label="Avaliado hoje" tone="sage" />
               ) : (
-                <Badge label={formatarDataHora(r.dataAgendada)} tone="neutral" />
+                <Badge label={formatarDataCurta(r.dataAgendada)} tone="neutral" />
               )}
-            </View>
+            </Pressable>
           ))
         )}
+
+        <BotaoSecundario
+          label="Excluir matéria"
+          tone="rust"
+          onPress={confirmarExclusaoMateria}
+          style={styles.excluirMateria}
+        />
       </ScrollView>
+
+      <RevisaoFormModal
+        visivel={modalCriarAberto}
+        modo="criar"
+        onFechar={() => setModalCriarAberto(false)}
+        onSalvar={({ tema, primeiraRevisaoEmDias }) => {
+          criarItemRevisao({ materiaId, tema, primeiraRevisaoEmDias });
+          setModalCriarAberto(false);
+        }}
+      />
+
+      <RevisaoFormModal
+        visivel={itemEmEdicao !== null}
+        modo="editar"
+        temaInicial={itemEmEdicao?.tema}
+        onFechar={() => setItemEmEdicao(null)}
+        onSalvar={({ tema }) => {
+          if (itemEmEdicao) atualizarTemaItemRevisao(itemEmEdicao.id, tema);
+          setItemEmEdicao(null);
+        }}
+        onExcluir={confirmarExclusaoItem}
+      />
     </SafeAreaView>
   );
 }
@@ -211,6 +310,35 @@ const styles = StyleSheet.create({
     color: colors.ink,
     marginRight: spacing.sm,
   },
+  secaoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  adicionarBotao: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 44,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+  },
+  adicionarBotaoPressed: { backgroundColor: colors.sageLight },
+  adicionarLabel: {
+    fontFamily: fontFamilies.bodyMedium,
+    fontSize: type.bodySmall.fontSize,
+    color: colors.sage,
+  },
+  itemRevisaoPressed: { opacity: 0.85 },
+  notaHistorico: {
+    fontFamily: fontFamilies.body,
+    fontSize: type.caption.fontSize,
+    color: colors.inkFaint,
+    marginTop: spacing.xxs,
+  },
+  excluirMateria: { marginTop: spacing.xl },
   vazio: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   vazioTexto: {
     fontFamily: fontFamilies.body,

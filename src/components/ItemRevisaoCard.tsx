@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ItemRevisao, Materia, NivelLembranca } from '@/types';
 import { colors, radius, spacing, type, fontFamilies, shadow } from '@/theme';
 import { Badge } from './Badge';
+import { hojeISO, formatarDataCurta } from '@/utils/datas';
 
 interface Props {
   item: ItemRevisao;
@@ -18,10 +19,7 @@ const opcoes: { nivel: NivelLembranca; label: string; tone: 'rust' | 'gold' | 's
 ];
 
 function formatarData(dataISO: string): string {
-  const hoje = new Date().toISOString().slice(0, 10);
-  if (dataISO === hoje) return 'Hoje';
-  const d = new Date(`${dataISO}T00:00:00`);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  return dataISO === hojeISO() ? 'Hoje' : formatarDataCurta(dataISO);
 }
 
 export function ItemRevisaoCard({ item, materia, onAvaliar }: Props) {

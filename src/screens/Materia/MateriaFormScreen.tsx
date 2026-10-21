@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,7 @@ import { BotaoPrimario } from '@/components/BotaoPrimario';
 import { colors, fontFamilies, spacing, type, radius } from '@/theme';
 import { materiaColorOptions } from '@/theme/colors';
 import { categorias, Categoria } from '@/types';
-import { criarMateria, atualizarMateria, getMateriaById } from '@/mocks/data';
+import { criarMateria, atualizarMateria, getMateriaById } from '@/services/dataService';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'MateriaForm'>;
 
@@ -36,22 +36,22 @@ export function MateriaFormScreen({ route, navigation }: Props) {
   const nomeValido = nome.trim().length >= 2;
   const mostrarErroNome = nomeTocado && !nomeValido;
 
+  useLayoutEffect(() => {
+    navigation.setOptions({ title: materiaExistente ? 'Editar matéria' : 'Nova matéria' });
+  }, [navigation, materiaExistente]);
+
   function salvar() {
     if (!nomeValido) return;
 
     if (materiaExistente) {
+      // Atualiza e volta ao Detalhe (que já está na pilha e reflete a mudança).
       atualizarMateria({ ...materiaExistente, nome: nome.trim(), cor, categoria });
-      navigation.navigate('MateriaDetail', { materiaId: materiaExistente.id });
+      navigation.goBack();
     } else {
-      const novaMateria = {
-        id: `mat-${Date.now()}`,
-        nome: nome.trim(),
-        cor,
-        categoria,
-        criadoEm: new Date().toISOString(),
-      };
-      criarMateria(novaMateria);
-      navigation.navigate('MateriaDetail', { materiaId: novaMateria.id });
+      // Cria, grava no armazenamento e SUBSTITUI o formulário pelo Detalhe,
+      // para que "voltar" leve à Home e não de volta ao formulário.
+      const nova = criarMateria({ nome: nome.trim(), cor, categoria });
+      navigation.replace('MateriaDetail', { materiaId: nova.id });
     }
   }
 

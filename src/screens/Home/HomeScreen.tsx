@@ -1,28 +1,21 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { HomeStackParamList } from '@/navigation/AppNavigator';
 import { CardMateria } from '@/components/CardMateria';
 import { BotaoPrimario } from '@/components/BotaoPrimario';
 import { colors, fontFamilies, spacing, type, radius, shadow } from '@/theme';
-import { materiasMock, getResumoDoDia } from '@/mocks/data';
-import { Materia, ResumoDia } from '@/types';
+import { useDados, listarMaterias, getResumoDoDia } from '@/services/dataService';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'HomeMain'>;
 
 export function HomeScreen({ navigation }: Props) {
-  const [materias, setMaterias] = useState<Materia[]>(materiasMock);
-  const [resumo, setResumo] = useState<ResumoDia>(getResumoDoDia());
-
-  useFocusEffect(
-    useCallback(() => {
-      setMaterias([...materiasMock]);
-      setResumo(getResumoDoDia());
-    }, [])
-  );
+  // Re-renderiza sempre que os dados persistidos mudam.
+  useDados();
+  const materias = listarMaterias();
+  const resumo = getResumoDoDia();
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -62,8 +55,10 @@ export function HomeScreen({ navigation }: Props) {
               <Text style={styles.secaoTitulo}>Suas matérias</Text>
               <Pressable
                 onPress={() => navigation.navigate('MateriaForm', undefined)}
+                accessibilityRole="button"
+                accessibilityLabel="Adicionar nova matéria"
                 hitSlop={8}
-                style={styles.addBotao}
+                style={({ pressed }) => [styles.addBotao, pressed && styles.addBotaoPressed]}
               >
                 <Ionicons name="add" size={18} color={colors.sage} />
                 <Text style={styles.addLabel}>Nova</Text>
@@ -138,7 +133,19 @@ const styles = StyleSheet.create({
     fontSize: type.subtitle.fontSize,
     color: colors.ink,
   },
-  addBotao: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  addBotao: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: spacing.sm,
+    justifyContent: 'center',
+    borderRadius: radius.md,
+  },
+  addBotaoPressed: {
+    backgroundColor: colors.sageLight,
+  },
   addLabel: {
     fontFamily: fontFamilies.bodyMedium,
     fontSize: type.bodySmall.fontSize,

@@ -16,6 +16,7 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import { AppNavigator } from '@/navigation/AppNavigator';
+import { iniciarDados } from '@/services/dataService';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -34,7 +35,14 @@ export default function App() {
     Inter_700Bold,
   });
 
-  const pronto = frauncesCarregada && interCarregada;
+  // Carrega do armazenamento persistente os dados salvos em sessões anteriores
+  // (ou grava os dados de exemplo na primeira execução) antes de mostrar a UI.
+  const [dadosCarregados, setDadosCarregados] = useState(false);
+  useEffect(() => {
+    iniciarDados().finally(() => setDadosCarregados(true));
+  }, []);
+
+  const pronto = frauncesCarregada && interCarregada && dadosCarregados;
 
   const onLayoutRootView = useCallback(async () => {
     if (pronto) {

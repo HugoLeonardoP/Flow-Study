@@ -8,7 +8,7 @@ import { TimerCircular } from '@/components/TimerCircular';
 import { BotaoPrimario } from '@/components/BotaoPrimario';
 import { BotaoSecundario } from '@/components/BotaoSecundario';
 import { colors, fontFamilies, spacing, type } from '@/theme';
-import { getMateriaById, registrarSessaoConcluida } from '@/mocks/data';
+import { getMateriaById, registrarSessaoConcluida } from '@/services/dataService';
 import { TipoCiclo } from '@/types';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Pomodoro'>;
@@ -99,7 +99,7 @@ export function PomodoroScreen({ route, navigation }: Props) {
         {
           text: 'Voltar para a Home',
           style: 'cancel',
-          onPress: () => navigation.navigate('HomeMain'),
+          onPress: () => navigation.popToTop(),
         },
       ]);
     }
@@ -165,7 +165,7 @@ export function PomodoroScreen({ route, navigation }: Props) {
           <View style={{ width: 48 }} />
         </View>
 
-        <BotaoSecundario label="Encerrar sessão" tone="rust" onPress={() => navigation.navigate('HomeMain')} />
+        <BotaoSecundario label="Encerrar sessão" tone="rust" onPress={() => navigation.goBack()} />
       </View>
     </SafeAreaView>
   );

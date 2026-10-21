@@ -45,12 +45,29 @@ export interface ItemRevisao {
   id: string;
   materiaId: string;
   tema: string;
-  dataAgendada: string; // ISO date (yyyy-mm-dd)
+  dataAgendada: string; // yyyy-mm-dd (dia local)
   intervaloAtualDias: number;
   fatorFacilidade: number;
   repeticoes: number;
   ultimaAvaliacao?: NivelLembranca;
-  concluidaHoje?: boolean;
+  ultimaAvaliacaoEm?: string; // yyyy-mm-dd (dia local) da última autoavaliação
+  criadoEm: string; // yyyy-mm-dd
+}
+
+// Registro histórico de cada autoavaliação — alimenta a taxa de lembrança
+// da tela de Estatísticas.
+export interface AvaliacaoRevisao {
+  id: string;
+  itemId: string;
+  materiaId: string;
+  nivel: NivelLembranca;
+  avaliadaEm: string; // ISO datetime
+}
+
+// Metadados do armazenamento (controle de versão do esquema e de 1ª execução).
+export interface MetaArmazenamento {
+  schemaVersion: number;
+  criadoEm: string;
 }
 
 export interface EstatisticaDia {
