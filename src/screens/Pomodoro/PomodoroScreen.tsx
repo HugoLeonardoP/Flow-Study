@@ -9,6 +9,9 @@ import { BotaoPrimario } from '@/components/BotaoPrimario';
 import { BotaoSecundario } from '@/components/BotaoSecundario';
 import { colors, fontFamilies, spacing, type } from '@/theme';
 import { getMateriaById, registrarSessaoConcluida } from '@/services/dataService';
+import { mensagemDeErro } from '@/services/api';
+import { mostrarFeedback } from '@/services/feedback';
+import { hojeISO } from '@/utils/datas';
 import { TipoCiclo } from '@/types';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Pomodoro'>;
@@ -65,14 +68,17 @@ export function PomodoroScreen({ route, navigation }: Props) {
   function finalizarCiclo() {
     setRodando(false);
 
+    // O servidor valida e guarda a sessão; o app só informa o resultado.
     registrarSessaoConcluida({
-      id: `ses-${Date.now()}`,
       materiaId: materiaId ?? null,
       inicio: new Date().toISOString(),
+      dia: hojeISO(),
       duracaoMin: duracaoTotal / 60,
       tipo,
       concluida: true,
-    });
+    })
+      .then(() => mostrarFeedback(tipo === 'foco' ? 'Sessão de foco registrada.' : 'Descanso registrado.'))
+      .catch((erro) => mostrarFeedback(mensagemDeErro(erro), 'erro'));
 
     if (tipo === 'foco') {
       setCiclosConcluidos((c) => c + 1);

@@ -20,6 +20,8 @@ import {
   removerMateria,
   foiAvaliadoHoje,
 } from '@/services/dataService';
+import { mensagemDeErro } from '@/services/api';
+import { mostrarFeedback } from '@/services/feedback';
 import { ItemRevisao } from '@/types';
 import { formatarDataCurta, formatarDataHora } from '@/utils/datas';
 
@@ -37,6 +39,8 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
   const [removida, setRemovida] = useState(false);
   const [modalCriarAberto, setModalCriarAberto] = useState(false);
   const [itemEmEdicao, setItemEmEdicao] = useState<ItemRevisao | null>(null);
+  const [salvandoItem, setSalvandoItem] = useState(false);
+  const [erroItem, setErroItem] = useState<string | null>(null);
 
   useEffect(() => {
     if (materia) navigation.setOptions({ title: materia.nome });
@@ -66,14 +70,33 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
         {
           text: 'Excluir',
           style: 'destructive',
-          onPress: () => {
-            setRemovida(true);
-            navigation.goBack();
-            removerMateria(materia.id);
+          onPress: async () => {
+            setRemovida(true); // evita piscar "não encontrada" enquanto o servidor responde
+            try {
+              await removerMateria(materia.id);
+              mostrarFeedback('Matéria excluída.');
+              navigation.goBack();
+            } catch (erro) {
+              setRemovida(false);
+              mostrarFeedback(mensagemDeErro(erro), 'erro');
+            }
           },
         },
       ]
     );
+  }
+
+  // Executa uma operação do modal: mostra "salvando", erros do servidor no próprio modal.
+  async function salvarItem(operacao: () => Promise<void>) {
+    setSalvandoItem(true);
+    setErroItem(null);
+    try {
+      await operacao();
+    } catch (erro) {
+      setErroItem(mensagemDeErro(erro));
+    } finally {
+      setSalvandoItem(false);
+    }
   }
 
   function confirmarExclusaoItem() {
@@ -84,9 +107,14 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
       {
         text: 'Excluir',
         style: 'destructive',
-        onPress: () => {
-          removerItemRevisao(item.id);
-          setItemEmEdicao(null);
+        onPress: async () => {
+          try {
+            await removerItemRevisao(item.id);
+            setItemEmEdicao(null);
+            mostrarFeedback('Item de revisão excluído.');
+          } catch (erro) {
+            mostrarFeedback(mensagemDeErro(erro), 'erro');
+          }
         },
       },
     ]);
@@ -156,7 +184,10 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
         <View style={styles.secaoHeader}>
           <Text style={[styles.secaoTitulo, { marginTop: 0, marginBottom: 0 }]}>Itens de revisão</Text>
           <Pressable
-            onPress={() => setModalCriarAberto(true)}
+            onPress={() => {
+              setErroItem(null);
+              setModalCriarAberto(true);
+            }}
             accessibilityRole="button"
             accessibilityLabel="Adicionar item de revisão"
             hitSlop={8}
@@ -174,7 +205,10 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
           revisoes.map((r) => (
             <Pressable
               key={r.id}
-              onPress={() => setItemEmEdicao(r)}
+              onPress={() => {
+                setErroItem(null);
+                setItemEmEdicao(r);
+              }}
               accessibilityRole="button"
               accessibilityLabel={`Editar item de revisão: ${r.tema}`}
               style={({ pressed }) => [styles.itemRevisao, shadow.card, pressed && styles.itemRevisaoPressed]}
@@ -203,10 +237,15 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
         visivel={modalCriarAberto}
         modo="criar"
         onFechar={() => setModalCriarAberto(false)}
-        onSalvar={({ tema, primeiraRevisaoEmDias }) => {
-          criarItemRevisao({ materiaId, tema, primeiraRevisaoEmDias });
-          setModalCriarAberto(false);
-        }}
+        erro={erroItem}
+        salvando={salvandoItem}
+        onSalvar={({ tema, primeiraRevisaoEmDias }) =>
+          salvarItem(async () => {
+            await criarItemRevisao({ materiaId, tema, primeiraRevisaoEmDias });
+            setModalCriarAberto(false);
+            mostrarFeedback('Item de revisão adicionado.');
+          })
+        }
       />
 
       <RevisaoFormModal
@@ -214,10 +253,15 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
         modo="editar"
         temaInicial={itemEmEdicao?.tema}
         onFechar={() => setItemEmEdicao(null)}
-        onSalvar={({ tema }) => {
-          if (itemEmEdicao) atualizarTemaItemRevisao(itemEmEdicao.id, tema);
-          setItemEmEdicao(null);
-        }}
+        erro={erroItem}
+        salvando={salvandoItem}
+        onSalvar={({ tema }) =>
+          salvarItem(async () => {
+            if (itemEmEdicao) await atualizarTemaItemRevisao(itemEmEdicao.id, tema);
+            setItemEmEdicao(null);
+            mostrarFeedback('Item de revisão atualizado.');
+          })
+        }
         onExcluir={confirmarExclusaoItem}
       />
     </SafeAreaView>

@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PieChart } from 'react-native-chart-kit';
 import { GraficoEstudo } from '@/components/GraficoEstudo';
 import { BotaoSecundario } from '@/components/BotaoSecundario';
+import { mensagemDeErro } from '@/services/api';
+import { mostrarFeedback } from '@/services/feedback';
 import { colors, fontFamilies, spacing, type, radius, shadow } from '@/theme';
 import {
   useDados,
@@ -34,10 +36,21 @@ export function EstatisticasScreen() {
   function confirmarApagarTudo() {
     Alert.alert(
       'Apagar todos os dados?',
-      'Todas as matérias, sessões, itens de revisão e avaliações serão removidos deste aparelho. Esta ação não pode ser desfeita.',
+      'Todas as matérias, sessões, itens de revisão e avaliações serão removidos do servidor. Esta ação não pode ser desfeita.',
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Apagar tudo', style: 'destructive', onPress: () => limparTodosOsDados() },
+        {
+          text: 'Apagar tudo',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await limparTodosOsDados();
+              mostrarFeedback('Todos os dados foram apagados.');
+            } catch (erro) {
+              mostrarFeedback(mensagemDeErro(erro), 'erro');
+            }
+          },
+        },
       ]
     );
   }
@@ -91,7 +104,7 @@ export function EstatisticasScreen() {
         </View>
 
         <View style={[styles.card, shadow.card]}>
-          <Text style={styles.cardTitulo}>Dados armazenados neste aparelho</Text>
+          <Text style={styles.cardTitulo}>Dados armazenados no servidor</Text>
           <View style={styles.totaisLinha}>
             <Text style={styles.totaisRotulo}>Matérias</Text>
             <Text style={styles.totaisValor}>{totais.materias}</Text>

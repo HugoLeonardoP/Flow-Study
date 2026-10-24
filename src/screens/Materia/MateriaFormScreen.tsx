@@ -9,6 +9,8 @@ import { colors, fontFamilies, spacing, type, radius } from '@/theme';
 import { materiaColorOptions } from '@/theme/colors';
 import { categorias, Categoria } from '@/types';
 import { criarMateria, atualizarMateria, getMateriaById } from '@/services/dataService';
+import { ErroApi, mensagemDeErro } from '@/services/api';
+import { mostrarFeedback } from '@/services/feedback';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'MateriaForm'>;
 
@@ -35,23 +37,40 @@ export function MateriaFormScreen({ route, navigation }: Props) {
   const [nomeTocado, setNomeTocado] = useState(false);
   const nomeValido = nome.trim().length >= 2;
   const mostrarErroNome = nomeTocado && !nomeValido;
+  const [salvando, setSalvando] = useState(false);
+  // Erro de validação devolvido pelo servidor (ex.: nome repetido).
+  const [erroServidorNome, setErroServidorNome] = useState<string | null>(null);
+  const erroNome = erroServidorNome ?? (mostrarErroNome ? 'Use pelo menos 2 caracteres.' : null);
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: materiaExistente ? 'Editar matéria' : 'Nova matéria' });
   }, [navigation, materiaExistente]);
 
-  function salvar() {
-    if (!nomeValido) return;
+  async function salvar() {
+    setNomeTocado(true);
+    if (!nomeValido || salvando) return;
+    setSalvando(true);
+    setErroServidorNome(null);
 
-    if (materiaExistente) {
-      // Atualiza e volta ao Detalhe (que já está na pilha e reflete a mudança).
-      atualizarMateria({ ...materiaExistente, nome: nome.trim(), cor, categoria });
-      navigation.goBack();
-    } else {
-      // Cria, grava no armazenamento e SUBSTITUI o formulário pelo Detalhe,
-      // para que "voltar" leve à Home e não de volta ao formulário.
-      const nova = criarMateria({ nome: nome.trim(), cor, categoria });
-      navigation.replace('MateriaDetail', { materiaId: nova.id });
+    try {
+      if (materiaExistente) {
+        // O servidor valida e atualiza; depois volta ao Detalhe (já na pilha).
+        await atualizarMateria({ ...materiaExistente, nome: nome.trim(), cor, categoria });
+        mostrarFeedback('Matéria atualizada.');
+        navigation.goBack();
+      } else {
+        // O servidor valida e cria; o formulário é SUBSTITUÍDO pelo Detalhe,
+        // para que "voltar" leve à Home e não de volta ao formulário.
+        const nova = await criarMateria({ nome: nome.trim(), cor, categoria });
+        mostrarFeedback('Matéria criada.');
+        navigation.replace('MateriaDetail', { materiaId: nova.id });
+      }
+    } catch (erro) {
+      // Erro de campo vindo do servidor aparece junto ao campo; os demais, como mensagem.
+      if (erro instanceof ErroApi && erro.campos?.nome) setErroServidorNome(erro.campos.nome);
+      else mostrarFeedback(mensagemDeErro(erro), 'erro');
+    } finally {
+      setSalvando(false);
     }
   }
 
@@ -61,15 +80,19 @@ export function MateriaFormScreen({ route, navigation }: Props) {
         <Text style={styles.rotulo}>Nome da matéria</Text>
         <TextInput
           value={nome}
-          onChangeText={setNome}
+          onChangeText={(texto) => {
+            setNome(texto);
+            setErroServidorNome(null);
+          }}
+          maxLength={40}
           onBlur={() => setNomeTocado(true)}
           placeholder="Ex: Química Orgânica"
           placeholderTextColor={colors.inkFaint}
           accessibilityLabel="Nome da matéria"
-          style={[styles.input, mostrarErroNome && styles.inputComErro]}
+          style={[styles.input, erroNome && styles.inputComErro]}
         />
-        <Text style={[styles.ajuda, mostrarErroNome && styles.ajudaErro]}>
-          {mostrarErroNome ? 'Use pelo menos 2 caracteres.' : 'Esse nome aparece nos cards e no timer.'}
+        <Text style={[styles.ajuda, erroNome && styles.ajudaErro]} accessibilityLiveRegion="polite">
+          {erroNome ?? 'Esse nome aparece nos cards e no timer.'}
         </Text>
 
         <Text style={styles.rotulo}>Cor</Text>
@@ -121,6 +144,7 @@ export function MateriaFormScreen({ route, navigation }: Props) {
           label={materiaExistente ? 'Salvar alterações' : 'Criar matéria'}
           onPress={salvar}
           disabled={!nomeValido}
+          loading={salvando}
           style={styles.salvar}
         />
       </ScrollView>

@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { HomeStackParamList } from '@/navigation/AppNavigator';
 import { CardMateria } from '@/components/CardMateria';
 import { BotaoPrimario } from '@/components/BotaoPrimario';
+import { AvisoConexao } from '@/components/AvisoConexao';
 import { colors, fontFamilies, spacing, type, radius, shadow } from '@/theme';
 import { useDados, listarMaterias, getResumoDoDia } from '@/services/dataService';
 
@@ -25,6 +26,7 @@ export function HomeScreen({ navigation }: Props) {
         contentContainerStyle={styles.lista}
         ListHeaderComponent={
           <>
+            <AvisoConexao />
             <View style={styles.saudacaoWrap}>
               <Text style={styles.saudacaoEyebrow}>Bem-vindo de volta</Text>
               <Text style={styles.saudacao}>Vamos manter o ritmo hoje?</Text>

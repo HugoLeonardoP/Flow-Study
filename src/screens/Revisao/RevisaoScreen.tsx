@@ -3,6 +3,10 @@ import { View, Text, StyleSheet, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ItemRevisaoCard } from '@/components/ItemRevisaoCard';
+import { AvisoConexao } from '@/components/AvisoConexao';
+import { mensagemDeErro } from '@/services/api';
+import { mostrarFeedback } from '@/services/feedback';
+import { formatarDataCurta } from '@/utils/datas';
 import { colors, fontFamilies, spacing, type } from '@/theme';
 import { useDados, getRevisoesDoDia, avaliarItemRevisao, getMateriaById } from '@/services/dataService';
 import { NivelLembranca } from '@/types';
@@ -12,8 +16,14 @@ export function RevisaoScreen() {
   useDados();
   const itens = getRevisoesDoDia();
 
-  function handleAvaliar(id: string, nivel: NivelLembranca) {
-    avaliarItemRevisao(id, nivel);
+  // O servidor registra a avaliação e decide a próxima data; o app mostra o resultado.
+  async function handleAvaliar(id: string, nivel: NivelLembranca) {
+    try {
+      const item = await avaliarItemRevisao(id, nivel);
+      mostrarFeedback(`Revisão registrada. Próxima revisão: ${formatarDataCurta(item.dataAgendada)}.`);
+    } catch (erro) {
+      mostrarFeedback(mensagemDeErro(erro), 'erro');
+    }
   }
 
   return (
@@ -31,6 +41,7 @@ export function RevisaoScreen() {
         data={itens}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.lista}
+        ListHeaderComponent={<AvisoConexao />}
         renderItem={({ item }) => (
           <ItemRevisaoCard item={item} materia={getMateriaById(item.materiaId)} onAvaliar={handleAvaliar} />
         )}

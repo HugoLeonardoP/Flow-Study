@@ -1,11 +1,15 @@
 # FlowStudy — Frontend (Expo / React Native / TypeScript)
 
 Organizador de estudos que combina **Pomodoro** com **revisão espaçada**
-(inspirada no SM-2). Este pacote contém a camada de interface e a
-**persistência local** dos dados no aparelho (AsyncStorage). Não há backend,
-autenticação, API externa ou sincronização em nuvem. Na primeira execução o
-app grava dados de exemplo (`src/mocks/data.ts`); depois disso, tudo o que
-o usuário cria, edita ou remove permanece salvo ao fechar e reabrir o app.
+(inspirada no SM-2). O projeto tem duas partes:
+
+- **App mobile** (raiz do projeto — Expo / React Native / TypeScript): interface,
+  navegação, feedback ao usuário e cache local dos últimos dados recebidos.
+- **Backend** (`backend/` — Node.js + Express): guarda os dados, valida as
+  entradas e aplica as regras de negócio (reagendamento de revisões, cascata de
+  exclusões, resumo e estatísticas). Na primeira execução grava dados de exemplo.
+
+Não há autenticação (um único usuário) nem sincronização em nuvem.
 
 ## Documentação
 
@@ -16,6 +20,8 @@ o usuário cria, edita ou remove permanece salvo ao fechar e reabrir o app.
   tela, feedback visual, decisões de UX e medidas de acessibilidade
   implementadas (contraste de cor, áreas de toque, rótulos para leitor de
   tela, tratamento da barra de navegação do sistema).
+- **`etapa-05.md`** — integração app + backend: fluxo completo de negócio,
+  validação de entradas, feedback, decisões técnicas e instruções de teste.
 - **`etapa-04.md`** — persistência de dados: mecanismo escolhido e
   justificativa, estrutura dos dados, operações implementadas, telas que
   usam os dados e procedimento de teste após fechar e reabrir o app.
@@ -23,21 +29,29 @@ o usuário cria, edita ou remove permanece salvo ao fechar e reabrir o app.
 ## Como rodar
 
 Requer **Node.js 20.19+** (ou 22.13+ / 24.3+), exigido pelo Expo SDK 57.
+Celular e computador na **mesma rede Wi-Fi**.
+
+**1. Backend** (terminal 1)
+
+```bash
+cd backend
+npm install
+npm start          # mostra: → no celular, use: http://SEU_IP:3000
+```
+
+**2. App** (terminal 2, na raiz do projeto)
 
 ```bash
 npm install
-npx expo install @react-native-async-storage/async-storage   # persistência (etapa 04)
-npx expo start
+npx expo install @react-native-async-storage/async-storage   # cache local (se ainda não instalou)
+npm install -D babel-preset-expo@~57.0.16                    # exigido pelo babel.config.js
+npx expo start -c
 ```
 
-O `expo install` escolhe a versão do AsyncStorage compatível com o seu SDK
-(SDK 57 → 2.2.0, a mesma embutida no Expo Go).
-
-Abra no Expo Go (Android/iOS) ou em um emulador. O projeto usa Expo SDK 57
-(React Native 0.86, React 19.2) + bibliotecas puramente JS/gerenciadas —
-não é necessário "prebuild" nativo. Todas as versões em `package.json`
-foram conferidas contra o registro do npm no momento da entrega para
-evitar conflitos de peer dependency.
+Escaneie o QR code no Expo Go. O app descobre sozinho o IP do computador; se
+não conseguir conectar, crie um arquivo `.env` na raiz com
+`EXPO_PUBLIC_API_URL=http://SEU_IP:3000` e rode `npx expo start -c`.
+Detalhes e roteiro de teste em `etapa-05.md`.
 
 ## Decisões de design
 
@@ -64,15 +78,20 @@ src/
   navigation/      # Bottom Tabs (Início/Revisões/Estatísticas) + Stack aninhada em Início
   theme/           # cores, tipografia, espaçamento
   types/           # Materia, SessaoPomodoro, ItemRevisao, AvaliacaoRevisao, EstatisticaDia
-  services/        # dataService.ts: operações de dados (CRUD) + cache + gravação
-  storage/         # armazenamento.ts: leitura/gravação de JSON no AsyncStorage
+  services/        # api.ts (cliente HTTP), dataService.ts (dados + cache), feedback.ts (mensagens)
+  storage/         # armazenamento.ts: cache local no AsyncStorage
   utils/           # datas.ts: datas no fuso local
-  mocks/           # dados de exemplo gravados apenas na primeira execução
+  config.ts        # endereço do backend
+backend/
+  server.js        # rotas da API (Express)
+  src/regras.js    # validações e regras de negócio
+  src/db.js        # persistência em arquivo JSON (data/db.json)
+  src/seed.js      # dados de exemplo da primeira execução
 ```
 
 ## O que é simulado de propósito
 
-- `recalcularProximaRevisao` em `src/services/dataService.ts` **não** é o
+- O reagendamento de revisões (`DIAS_POR_NIVEL` em `backend/src/regras.js`) **não** é o
   algoritmo SM-2 real — apenas define um número fixo de dias por nível de
   lembrança, como pedido no briefing.
 - Notificações são apenas alertas nativos (`Alert.alert`) simulando o fim

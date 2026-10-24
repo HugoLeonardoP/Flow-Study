@@ -21,6 +21,10 @@ interface Props {
   onFechar: () => void;
   onSalvar: (dados: { tema: string; primeiraRevisaoEmDias: number }) => void;
   onExcluir?: () => void;
+  /** Mensagem de erro devolvida pelo servidor (ex.: validação). */
+  erro?: string | null;
+  /** Enquanto a operação está em andamento no servidor. */
+  salvando?: boolean;
 }
 
 const opcoesQuando = [
@@ -36,6 +40,8 @@ export function RevisaoFormModal({
   onFechar,
   onSalvar,
   onExcluir,
+  erro = null,
+  salvando = false,
 }: Props) {
   const [tema, setTema] = useState(temaInicial);
   const [dias, setDias] = useState(0);
@@ -51,11 +57,12 @@ export function RevisaoFormModal({
   }, [visivel, temaInicial]);
 
   const valido = tema.trim().length >= 2;
-  const mostrarErro = tocado && !valido;
+  const mensagemErro = erro ?? (tocado && !valido ? 'Use pelo menos 2 caracteres.' : null);
+  const mostrarErro = mensagemErro !== null;
 
   function salvar() {
     setTocado(true);
-    if (!valido) return;
+    if (!valido || salvando) return;
     onSalvar({ tema: tema.trim(), primeiraRevisaoEmDias: dias });
   }
 
@@ -100,8 +107,8 @@ export function RevisaoFormModal({
             accessibilityLabel="Tema estudado"
             style={[styles.input, mostrarErro && styles.inputErro]}
           />
-          <Text style={[styles.ajuda, mostrarErro && styles.ajudaErro]}>
-            {mostrarErro ? 'Use pelo menos 2 caracteres.' : 'Aparece na lista de revisões do dia.'}
+          <Text style={[styles.ajuda, mostrarErro && styles.ajudaErro]} accessibilityLiveRegion="polite">
+            {mensagemErro ?? 'Aparece na lista de revisões do dia.'}
           </Text>
 
           {modo === 'criar' && (
@@ -134,6 +141,7 @@ export function RevisaoFormModal({
           <BotaoPrimario
             label={modo === 'criar' ? 'Adicionar item' : 'Salvar alterações'}
             onPress={salvar}
+            loading={salvando}
             style={styles.salvar}
           />
 

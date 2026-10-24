@@ -16,6 +16,7 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import { AppNavigator } from '@/navigation/AppNavigator';
+import { FeedbackHost } from '@/components/FeedbackHost';
 import { iniciarDados } from '@/services/dataService';
 import { colors } from '@/theme';
 
@@ -59,6 +60,7 @@ export default function App() {
       <View style={{ flex: 1, backgroundColor: colors.paper }} onLayout={onLayoutRootView}>
         <StatusBar style="dark" />
         <AppNavigator />
+        <FeedbackHost />
       </View>
     </SafeAreaProvider>
   );

@@ -1,13 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Camada mais baixa da persistência: só sabe ler/gravar JSON no AsyncStorage.
-// Cada coleção do app fica em uma chave própria (equivalente a uma "tabela").
+// Cache local: guarda a última cópia dos dados recebida do servidor, para o app
+// abrir já com dados (e funcionar em modo leitura) quando estiver sem conexão.
+// A fonte da verdade dos dados é o backend.
 export const CHAVES = {
-  meta: '@flowstudy/meta',
-  materias: '@flowstudy/materias',
-  sessoes: '@flowstudy/sessoes',
-  itensRevisao: '@flowstudy/itens-revisao',
-  avaliacoes: '@flowstudy/avaliacoes',
+  cache: '@flowstudy/cache-v2',
 } as const;
 
 export async function lerJSON<T>(chave: string): Promise<T | null> {

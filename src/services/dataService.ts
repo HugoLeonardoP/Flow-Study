@@ -1,52 +1,53 @@
 import { useSyncExternalStore } from 'react';
+import { AppState } from 'react-native';
 import {
   Materia,
   SessaoPomodoro,
   ItemRevisao,
-  AvaliacaoRevisao,
   NivelLembranca,
-  EstatisticaDia,
-  ResumoDia,
-  MetaArmazenamento,
+  SnapshotDados,
 } from '@/types';
-import { gerarDadosIniciais } from '@/mocks/data';
+import { api, ErroApi } from '@/services/api';
 import { CHAVES, lerJSON, salvarJSON } from '@/storage/armazenamento';
-import { hojeISO, diaLocalDe } from '@/utils/datas';
+import { hojeISO } from '@/utils/datas';
 
 // ===========================================================================
-// Serviço de dados do FlowStudy — persistência local com AsyncStorage.
+// Serviço de dados do app (cliente do backend).
 //
-// Como funciona:
-//  1. `iniciarDados()` roda UMA vez ao abrir o app (ver App.tsx): lê tudo do
-//     AsyncStorage para um cache em memória (ou semeia dados de exemplo na
-//     primeira execução).
-//  2. As telas LEEM do cache (rápido e síncrono) e se inscrevem nas mudanças
-//     com o hook `useDados()`.
-//  3. Toda ESCRITA (criar/atualizar/remover) altera o cache, avisa as telas
-//     e grava a coleção alterada no AsyncStorage em segundo plano.
+// Divisão de responsabilidades:
+//  • BACKEND: guarda os dados, valida entradas, aplica regras de negócio
+//    (cascata de exclusões, reagendamento de revisões, resumo e estatísticas).
+//  • APP (este arquivo): envia as ações do usuário ao servidor, guarda em
+//    memória a última cópia recebida e a replica em cache local (AsyncStorage)
+//    para abrir rápido e mostrar os últimos dados quando estiver sem conexão.
+//
+// Toda alteração exige conexão: o servidor responde com o estado atualizado e
+// o app o substitui por inteiro. As telas leem os dados daqui e se inscrevem
+// com `useDados()`.
 // ===========================================================================
 
-const SCHEMA_VERSION = 1;
+const DADOS_VAZIOS: SnapshotDados = {
+  materias: [],
+  sessoes: [],
+  itensRevisao: [],
+  avaliacoes: [],
+  derivados: {
+    resumoDoDia: { minutosEstudadosHoje: 0, revisoesPendentesHoje: 0 },
+    revisoesDoDiaIds: [],
+    estatisticasSemana: [],
+    taxaLembranca: { facil: 0, dificil: 0, naoLembrei: 0, total: 0 },
+    totais: { materias: 0, sessoesFoco: 0, minutosFoco: 0, itensRevisao: 0, avaliacoes: 0 },
+  },
+};
 
-type Colecao = 'materias' | 'sessoes' | 'itensRevisao' | 'avaliacoes';
+export type StatusConexao = 'conectando' | 'online' | 'offline';
 
-interface Estado {
-  materias: Materia[];
-  sessoes: SessaoPomodoro[];
-  itensRevisao: ItemRevisao[];
-  avaliacoes: AvaliacaoRevisao[];
-}
-
-let estado: Estado = { materias: [], sessoes: [], itensRevisao: [], avaliacoes: [] };
+let dados: SnapshotDados = DADOS_VAZIOS;
+let status: StatusConexao = 'conectando';
 let versao = 0;
 let iniciado = false;
-// Se a leitura inicial falhar, o app segue funcionando só em memória e NÃO
-// grava nada — assim dados já salvos nunca são sobrescritos por engano.
-let somenteMemoria = false;
 
-// ---------------------------------------------------------------------------
-// Inscrição de telas (reatividade)
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------- reatividade
 const ouvintes = new Set<() => void>();
 
 function inscrever(ouvinte: () => void): () => void {
@@ -66,168 +67,91 @@ export function useDados(): number {
   return useSyncExternalStore(inscrever, () => versao);
 }
 
-// ---------------------------------------------------------------------------
-// Persistência (escrita em fila para preservar a ordem das gravações)
-// ---------------------------------------------------------------------------
-let filaDeEscrita: Promise<void> = Promise.resolve();
-
-function persistir(colecoes: Colecao[]) {
-  if (somenteMemoria) return;
-  colecoes.forEach((colecao) => {
-    filaDeEscrita = filaDeEscrita
-      // lê `estado[colecao]` só na hora de gravar: sempre salva a versão mais recente
-      .then(() => salvarJSON(CHAVES[colecao], estado[colecao]))
-      .catch((erro) => console.warn(`[FlowStudy] Falha ao gravar "${colecao}":`, erro));
-  });
-}
-
-function atualizarEstado(parcial: Partial<Estado>) {
-  estado = { ...estado, ...parcial };
-  persistir(Object.keys(parcial) as Colecao[]);
+// ------------------------------------------------------------- sincronização
+function aplicar(novos: SnapshotDados) {
+  dados = novos;
+  status = 'online';
   notificar();
+  salvarJSON(CHAVES.cache, novos).catch((erro) =>
+    console.warn('[FlowStudy] Falha ao gravar o cache local:', erro)
+  );
 }
 
-function gerarId(prefixo: string): string {
-  return `${prefixo}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+/** Busca no servidor o estado atual. Em caso de falha, mantém os dados em cache e marca "offline". */
+export async function sincronizar(): Promise<void> {
+  if (status !== 'online') {
+    status = 'conectando';
+    notificar();
+  }
+  try {
+    const resposta = await api.get<{ dados: SnapshotDados }>('/dados');
+    aplicar(resposta.dados);
+  } catch {
+    status = 'offline';
+    notificar();
+  }
 }
 
-function listaOuVazia<T>(valor: unknown): T[] {
-  return Array.isArray(valor) ? (valor as T[]) : [];
-}
-
-// ---------------------------------------------------------------------------
-// Inicialização — recuperação dos dados ao (re)abrir o app
-// ---------------------------------------------------------------------------
+/** Chamada ao abrir o app: carrega o cache local e sincroniza com o servidor em segundo plano. */
 export async function iniciarDados(): Promise<void> {
   if (iniciado) return;
   iniciado = true;
 
   try {
-    const meta = await lerJSON<MetaArmazenamento>(CHAVES.meta);
-
-    if (meta === null) {
-      // Primeira execução: grava os dados de exemplo.
-      const inicial = gerarDadosIniciais();
-      estado = { ...inicial };
-      await Promise.all([
-        salvarJSON(CHAVES.materias, estado.materias),
-        salvarJSON(CHAVES.sessoes, estado.sessoes),
-        salvarJSON(CHAVES.itensRevisao, estado.itensRevisao),
-        salvarJSON(CHAVES.avaliacoes, estado.avaliacoes),
-      ]);
-      // `meta` por último: se o app fechar no meio, a próxima abertura refaz a semeadura.
-      const novaMeta: MetaArmazenamento = {
-        schemaVersion: SCHEMA_VERSION,
-        criadoEm: new Date().toISOString(),
-      };
-      await salvarJSON(CHAVES.meta, novaMeta);
-    } else {
-      const [materias, sessoes, itensRevisao, avaliacoes] = await Promise.all([
-        lerJSON<Materia[]>(CHAVES.materias),
-        lerJSON<SessaoPomodoro[]>(CHAVES.sessoes),
-        lerJSON<ItemRevisao[]>(CHAVES.itensRevisao),
-        lerJSON<AvaliacaoRevisao[]>(CHAVES.avaliacoes),
-      ]);
-      estado = {
-        materias: listaOuVazia<Materia>(materias),
-        sessoes: listaOuVazia<SessaoPomodoro>(sessoes),
-        itensRevisao: listaOuVazia<ItemRevisao>(itensRevisao),
-        avaliacoes: listaOuVazia<AvaliacaoRevisao>(avaliacoes),
-      };
-      // Ponto de extensão: se `meta.schemaVersion < SCHEMA_VERSION`, migrar aqui.
-    }
+    const cache = await lerJSON<SnapshotDados>(CHAVES.cache);
+    if (cache && Array.isArray(cache.materias) && cache.derivados) dados = cache;
   } catch (erro) {
-    console.warn('[FlowStudy] Armazenamento indisponível; usando apenas memória.', erro);
-    somenteMemoria = true;
-    estado = { ...gerarDadosIniciais() };
+    console.warn('[FlowStudy] Cache local indisponível:', erro);
   }
-
   notificar();
+
+  void sincronizar();
+  // Ao voltar para o app, atualiza (ex.: virou o dia ou os dados mudaram no servidor).
+  AppState.addEventListener('change', (estado) => {
+    if (estado === 'active') void sincronizar();
+  });
+}
+
+export function getStatusConexao(): StatusConexao {
+  return status;
+}
+
+type ComDados = { dados: SnapshotDados };
+
+/** Executa uma alteração no servidor e, se der certo, adota o estado devolvido por ele. */
+async function chamar<T extends ComDados>(requisicao: Promise<T>): Promise<T> {
+  try {
+    const resposta = await requisicao;
+    aplicar(resposta.dados);
+    return resposta;
+  } catch (erro) {
+    if (erro instanceof ErroApi && erro.semConexao) {
+      status = 'offline';
+      notificar();
+    }
+    throw erro;
+  }
 }
 
 // ===========================================================================
-// MATÉRIAS
+// LEITURA (a partir da última cópia recebida)
 // ===========================================================================
 export function listarMaterias(): Materia[] {
-  return estado.materias;
+  return dados.materias;
 }
 
 export function getMateriaById(id: string | null | undefined): Materia | undefined {
-  return estado.materias.find((m) => m.id === id);
-}
-
-export function criarMateria(dados: Pick<Materia, 'nome' | 'cor' | 'categoria'>): Materia {
-  const nova: Materia = { ...dados, id: gerarId('mat'), criadoEm: new Date().toISOString() };
-  atualizarEstado({ materias: [nova, ...estado.materias] });
-  return nova;
-}
-
-export function atualizarMateria(materia: Materia): void {
-  atualizarEstado({
-    materias: estado.materias.map((m) => (m.id === materia.id ? materia : m)),
-  });
-}
-
-/** Remove a matéria e tudo que depende dela (sessões, itens de revisão e avaliações). */
-export function removerMateria(id: string): void {
-  atualizarEstado({
-    materias: estado.materias.filter((m) => m.id !== id),
-    sessoes: estado.sessoes.filter((s) => s.materiaId !== id),
-    itensRevisao: estado.itensRevisao.filter((r) => r.materiaId !== id),
-    avaliacoes: estado.avaliacoes.filter((a) => a.materiaId !== id),
-  });
-}
-
-// ===========================================================================
-// SESSÕES POMODORO
-// ===========================================================================
-export function registrarSessaoConcluida(sessao: SessaoPomodoro): void {
-  atualizarEstado({ sessoes: [sessao, ...estado.sessoes] });
+  return dados.materias.find((m) => m.id === id);
 }
 
 export function getHistoricoSessoes(materiaId: string): SessaoPomodoro[] {
-  return estado.sessoes
+  return dados.sessoes
     .filter((s) => s.materiaId === materiaId && s.tipo === 'foco')
     .sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime());
 }
 
-// ===========================================================================
-// ITENS DE REVISÃO
-// ===========================================================================
-export function criarItemRevisao(dados: {
-  materiaId: string;
-  tema: string;
-  primeiraRevisaoEmDias: number;
-}): ItemRevisao {
-  const novo: ItemRevisao = {
-    id: gerarId('rev'),
-    materiaId: dados.materiaId,
-    tema: dados.tema.trim(),
-    dataAgendada: hojeISO(dados.primeiraRevisaoEmDias),
-    intervaloAtualDias: 1,
-    fatorFacilidade: 2.5,
-    repeticoes: 0,
-    criadoEm: hojeISO(),
-  };
-  atualizarEstado({ itensRevisao: [novo, ...estado.itensRevisao] });
-  return novo;
-}
-
-export function atualizarTemaItemRevisao(id: string, tema: string): void {
-  atualizarEstado({
-    itensRevisao: estado.itensRevisao.map((r) => (r.id === id ? { ...r, tema: tema.trim() } : r)),
-  });
-}
-
-export function removerItemRevisao(id: string): void {
-  atualizarEstado({
-    itensRevisao: estado.itensRevisao.filter((r) => r.id !== id),
-    avaliacoes: estado.avaliacoes.filter((a) => a.itemId !== id),
-  });
-}
-
 export function getRevisoesDaMateria(materiaId: string): ItemRevisao[] {
-  return estado.itensRevisao
+  return dados.itensRevisao
     .filter((r) => r.materiaId === materiaId)
     .sort((a, b) => (a.dataAgendada < b.dataAgendada ? -1 : a.dataAgendada > b.dataAgendada ? 1 : 0));
 }
@@ -236,98 +160,68 @@ export function foiAvaliadoHoje(item: ItemRevisao): boolean {
   return item.ultimaAvaliacaoEm === hojeISO();
 }
 
-/** Itens vencidos ou agendados para hoje que ainda não foram avaliados hoje. */
+/** Itens a revisar hoje — a lista é decidida pelo servidor. */
 export function getRevisoesDoDia(): ItemRevisao[] {
-  const hoje = hojeISO();
-  return estado.itensRevisao
-    .filter((r) => r.dataAgendada <= hoje && !foiAvaliadoHoje(r))
-    .sort((a, b) => (a.dataAgendada < b.dataAgendada ? -1 : a.dataAgendada > b.dataAgendada ? 1 : 0));
+  return dados.derivados.revisoesDoDiaIds
+    .map((id) => dados.itensRevisao.find((r) => r.id === id))
+    .filter((r): r is ItemRevisao => r !== undefined);
 }
 
-// -----------------------------------------------------------------------
-// Simulação do algoritmo SM-2. NÃO é o SM-2 real — apenas define um número
-// fixo de dias até a próxima revisão para cada nível de lembrança.
-// -----------------------------------------------------------------------
-export function recalcularProximaRevisao(item: ItemRevisao, avaliacao: NivelLembranca): ItemRevisao {
-  const diasPorNivel: Record<NivelLembranca, number> = {
-    nao_lembrei: 1,
-    dificil: 3,
-    facil: 6,
-  };
-  const novoIntervalo = diasPorNivel[avaliacao];
-
-  return {
-    ...item,
-    ultimaAvaliacao: avaliacao,
-    ultimaAvaliacaoEm: hojeISO(),
-    intervaloAtualDias: novoIntervalo,
-    repeticoes: avaliacao === 'nao_lembrei' ? 0 : item.repeticoes + 1,
-    dataAgendada: hojeISO(novoIntervalo),
-  };
-}
-
-export function avaliarItemRevisao(id: string, nivel: NivelLembranca): void {
-  const item = estado.itensRevisao.find((r) => r.id === id);
-  if (!item) return;
-
-  const registro: AvaliacaoRevisao = {
-    id: gerarId('ava'),
-    itemId: item.id,
-    materiaId: item.materiaId,
-    nivel,
-    avaliadaEm: new Date().toISOString(),
-  };
-
-  atualizarEstado({
-    itensRevisao: estado.itensRevisao.map((r) => (r.id === id ? recalcularProximaRevisao(r, nivel) : r)),
-    avaliacoes: [registro, ...estado.avaliacoes],
-  });
-}
+export const getResumoDoDia = () => dados.derivados.resumoDoDia;
+export const getEstatisticasSemana = () => dados.derivados.estatisticasSemana;
+export const getTaxaLembranca = () => dados.derivados.taxaLembranca;
+export const getTotaisArmazenados = () => dados.derivados.totais;
 
 // ===========================================================================
-// DADOS DERIVADOS (Home e Estatísticas)
+// ALTERAÇÕES (todas passam pelo servidor)
 // ===========================================================================
-export function getResumoDoDia(): ResumoDia {
-  const hoje = hojeISO();
-  const minutosEstudadosHoje = estado.sessoes
-    .filter((s) => s.tipo === 'foco' && s.concluida && diaLocalDe(s.inicio) === hoje)
-    .reduce((acc, s) => acc + s.duracaoMin, 0);
-
-  return { minutosEstudadosHoje, revisoesPendentesHoje: getRevisoesDoDia().length };
+export async function criarMateria(
+  entrada: Pick<Materia, 'nome' | 'cor' | 'categoria'>
+): Promise<Materia> {
+  const r = await chamar(api.post<{ materia: Materia } & ComDados>('/materias', entrada));
+  return r.materia;
 }
 
-/** Minutos de foco por dia nos últimos 7 dias (do mais antigo ao de hoje). */
-export function getEstatisticasSemana(): EstatisticaDia[] {
-  const dias: EstatisticaDia[] = [];
-  for (let offset = -6; offset <= 0; offset++) {
-    const dia = hojeISO(offset);
-    const minutos = estado.sessoes
-      .filter((s) => s.tipo === 'foco' && s.concluida && diaLocalDe(s.inicio) === dia)
-      .reduce((acc, s) => acc + s.duracaoMin, 0);
-    dias.push({ data: dia, minutosEstudados: minutos });
-  }
-  return dias;
+export async function atualizarMateria(materia: Materia): Promise<Materia> {
+  const { nome, cor, categoria } = materia;
+  const r = await chamar(api.put<{ materia: Materia } & ComDados>(`/materias/${materia.id}`, { nome, cor, categoria }));
+  return r.materia;
 }
 
-export function getTaxaLembranca() {
-  const facil = estado.avaliacoes.filter((a) => a.nivel === 'facil').length;
-  const dificil = estado.avaliacoes.filter((a) => a.nivel === 'dificil').length;
-  const naoLembrei = estado.avaliacoes.filter((a) => a.nivel === 'nao_lembrei').length;
-  return { facil, dificil, naoLembrei, total: facil + dificil + naoLembrei };
+/** O servidor remove também sessões, itens de revisão e avaliações da matéria. */
+export async function removerMateria(id: string): Promise<void> {
+  await chamar(api.del<ComDados>(`/materias/${id}`));
 }
 
-export function getTotaisArmazenados() {
-  const sessoesFoco = estado.sessoes.filter((s) => s.tipo === 'foco' && s.concluida);
-  return {
-    materias: estado.materias.length,
-    sessoesFoco: sessoesFoco.length,
-    minutosFoco: sessoesFoco.reduce((acc, s) => acc + s.duracaoMin, 0),
-    itensRevisao: estado.itensRevisao.length,
-    avaliacoes: estado.avaliacoes.length,
-  };
+export async function criarItemRevisao(entrada: {
+  materiaId: string;
+  tema: string;
+  primeiraRevisaoEmDias: number;
+}): Promise<ItemRevisao> {
+  const r = await chamar(api.post<{ item: ItemRevisao } & ComDados>('/itens-revisao', entrada));
+  return r.item;
 }
 
-/** Apaga TODOS os dados do usuário (os dados de exemplo não voltam sozinhos). */
-export function limparTodosOsDados(): void {
-  atualizarEstado({ materias: [], sessoes: [], itensRevisao: [], avaliacoes: [] });
+export async function atualizarTemaItemRevisao(id: string, tema: string): Promise<ItemRevisao> {
+  const r = await chamar(api.put<{ item: ItemRevisao } & ComDados>(`/itens-revisao/${id}`, { tema }));
+  return r.item;
+}
+
+export async function removerItemRevisao(id: string): Promise<void> {
+  await chamar(api.del<ComDados>(`/itens-revisao/${id}`));
+}
+
+/** O servidor registra a avaliação e calcula a próxima data de revisão (devolvida no item). */
+export async function avaliarItemRevisao(id: string, nivel: NivelLembranca): Promise<ItemRevisao> {
+  const r = await chamar(api.post<{ item: ItemRevisao } & ComDados>(`/itens-revisao/${id}/avaliacao`, { nivel }));
+  return r.item;
+}
+
+export async function registrarSessaoConcluida(sessao: Omit<SessaoPomodoro, 'id'>): Promise<void> {
+  await chamar(api.post<ComDados>('/sessoes', sessao));
+}
+
+/** Apaga TODOS os dados no servidor. */
+export async function limparTodosOsDados(): Promise<void> {
+  await chamar(api.del<ComDados>('/dados'));
 }
