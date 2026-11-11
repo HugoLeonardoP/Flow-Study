@@ -8,6 +8,7 @@ import { BotaoPrimario } from '@/components/BotaoPrimario';
 import { BotaoSecundario } from '@/components/BotaoSecundario';
 import { Badge } from '@/components/Badge';
 import { RevisaoFormModal } from '@/components/RevisaoFormModal';
+import { ResumoWikipedia } from '@/components/ResumoWikipedia';
 import { colors, fontFamilies, spacing, type, radius, shadow } from '@/theme';
 import {
   useDados,
@@ -16,6 +17,7 @@ import {
   getRevisoesDaMateria,
   criarItemRevisao,
   atualizarTemaItemRevisao,
+  salvarResumoNoItem,
   removerItemRevisao,
   removerMateria,
   foiAvaliadoHoje,
@@ -59,6 +61,8 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
   const historico = getHistoricoSessoes(materiaId);
   const revisoes = getRevisoesDaMateria(materiaId);
   const totalMinutos = historico.reduce((acc, s) => acc + s.duracaoMin, 0);
+  // Versão atual do item aberto no modal (reflete o resumo recém-salvo).
+  const itemAtual = itemEmEdicao ? revisoes.find((r) => r.id === itemEmEdicao.id) ?? null : null;
 
   function confirmarExclusaoMateria() {
     if (!materia) return;
@@ -210,12 +214,21 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
                 setItemEmEdicao(r);
               }}
               accessibilityRole="button"
-              accessibilityLabel={`Editar item de revisão: ${r.tema}`}
+              accessibilityLabel={`Editar item de revisão: ${r.tema}${r.resumo ? ', com resumo salvo' : ''}`}
               style={({ pressed }) => [styles.itemRevisao, shadow.card, pressed && styles.itemRevisaoPressed]}
             >
               <Text style={styles.itemRevisaoTema} numberOfLines={1}>
                 {r.tema}
               </Text>
+              {r.resumo ? (
+                <Ionicons
+                  name="book-outline"
+                  size={16}
+                  color={colors.sage}
+                  style={{ marginRight: spacing.xs }}
+                  accessibilityLabel="Tem resumo da Wikipédia salvo"
+                />
+              ) : null}
               {foiAvaliadoHoje(r) ? (
                 <Badge label="Avaliado hoje" tone="sage" />
               ) : (
@@ -263,6 +276,17 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
           })
         }
         onExcluir={confirmarExclusaoItem}
+        extra={
+          itemAtual ? (
+            <ResumoWikipedia
+              key={itemAtual.id}
+              temaInicial={itemAtual.tema}
+              salvo={itemAtual.resumo ?? null}
+              onSalvar={(resumo) => salvarResumoNoItem(itemAtual.id, resumo)}
+              onRemover={() => salvarResumoNoItem(itemAtual.id, null)}
+            />
+          ) : null
+        }
       />
     </SafeAreaView>
   );

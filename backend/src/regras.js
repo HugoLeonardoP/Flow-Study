@@ -100,6 +100,23 @@ function validarNovaSessao(corpo, db, hoje) {
   };
 }
 
+// Resumo da Wikipédia anexado a um item. `null` remove o resumo salvo.
+function validarResumoSalvo(valor) {
+  if (valor === null) return null;
+  const campos = {};
+  const r = valor && typeof valor === 'object' ? valor : {};
+  const texto = (v) => (typeof v === 'string' ? v.trim() : '');
+  const titulo = texto(r.titulo);
+  const corpo = texto(r.texto);
+  const url = texto(r.url);
+  if (titulo.length < 1 || titulo.length > 150) campos.titulo = 'Título do resumo inválido.';
+  if (corpo.length < 1 || corpo.length > 1500) campos.texto = 'Texto do resumo inválido.';
+  if (!/^https:\/\/[a-z-]+\.wikipedia\.org\//i.test(url) || url.length > 300)
+    campos.url = 'Endereço do artigo inválido (precisa ser da Wikipédia).';
+  lancarSeHouverErros(campos);
+  return { titulo, texto: corpo, url, fonte: 'Wikipédia', salvoEm: new Date().toISOString() };
+}
+
 // --------------------------------------------------------------- operações
 function removerMateriaEmCascata(db, id) {
   db.materias = db.materias.filter((m) => m.id !== id);
@@ -193,6 +210,7 @@ module.exports = {
   validarTema,
   validarNovoItem,
   validarNovaSessao,
+  validarResumoSalvo,
   exigirMateria,
   removerMateriaEmCascata,
   removerItemEmCascata,

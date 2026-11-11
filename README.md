@@ -8,8 +8,18 @@ Organizador de estudos que combina **Pomodoro** com **revisão espaçada**
 - **Backend** (`backend/` — Node.js + Express): guarda os dados, valida as
   entradas e aplica as regras de negócio (reagendamento de revisões, cascata de
   exclusões, resumo e estatísticas). Na primeira execução grava dados de exemplo.
+- **Serviço externo — Wikipédia**: o backend consulta a API pública da Wikipédia
+  para mostrar o **resumo de um tema de revisão** (sem chave de API).
 
 Não há autenticação (um único usuário) nem sincronização em nuvem.
+
+## Funcionalidades
+
+- Matérias, itens de revisão e sessões Pomodoro (criar, editar, excluir).
+- Autoavaliação com reagendamento da próxima revisão e estatísticas.
+- **Resumo do tema pela Wikipédia**: no Detalhe da matéria, toque em um item de
+  revisão → bloco "Resumo na Wikipédia" → **Buscar resumo**. Mostra carregando,
+  resultado, "sem resultado" ou erro, e permite **salvar o resumo no item**.
 
 ## Documentação
 
@@ -20,6 +30,9 @@ Não há autenticação (um único usuário) nem sincronização em nuvem.
   tela, feedback visual, decisões de UX e medidas de acessibilidade
   implementadas (contraste de cor, áreas de toque, rótulos para leitor de
   tela, tratamento da barra de navegação do sistema).
+- **`docs/etapa-06.md`** — integração com a API da Wikipédia: endpoints,
+  métodos HTTP, estrutura dos dados, fluxo, estados (carregando, sucesso, erro,
+  ausência de dados), configuração e roteiro de teste.
 - **`etapa-05.md`** — integração app + backend: fluxo completo de negócio,
   validação de entradas, feedback, decisões técnicas e instruções de teste.
 - **`etapa-04.md`** — persistência de dados: mecanismo escolhido e
@@ -53,6 +66,13 @@ não conseguir conectar, crie um arquivo `.env` na raiz com
 `EXPO_PUBLIC_API_URL=http://SEU_IP:3000` e rode `npx expo start -c`.
 Detalhes e roteiro de teste em `etapa-05.md`.
 
+**Resumo da Wikipédia (opcional configurar):** funciona sem configuração. O
+**backend precisa de internet** para consultar a Wikipédia. Para identificar o
+app (boa prática exigida pela Wikimedia), copie `backend/.env.example` para
+`backend/.env`, coloque seu contato em `WIKIPEDIA_USER_AGENT` e rode
+`npm run start:env` no lugar de `npm start`. Não há credenciais; o `.env` está
+no `.gitignore`. Veja `docs/etapa-06.md`.
+
 ## Decisões de design
 
 - **Paleta**: papel neutro (`#F7F4EC`) como base, verde-sálvia como cor de
@@ -74,7 +94,7 @@ Detalhes e roteiro de teste em `etapa-05.md`.
 ```
 src/
   screens/        # uma pasta por tela
-  components/      # TimerCircular, CardMateria, ItemRevisaoCard, GraficoEstudo, botões, badge
+  components/      # TimerCircular, CardMateria, ItemRevisaoCard, GraficoEstudo, ResumoWikipedia, botões, badge
   navigation/      # Bottom Tabs (Início/Revisões/Estatísticas) + Stack aninhada em Início
   theme/           # cores, tipografia, espaçamento
   types/           # Materia, SessaoPomodoro, ItemRevisao, AvaliacaoRevisao, EstatisticaDia
@@ -85,6 +105,7 @@ src/
 backend/
   server.js        # rotas da API (Express)
   src/regras.js    # validações e regras de negócio
+  src/wikipedia.js # cliente da API da Wikipédia (resumo do tema)
   src/db.js        # persistência em arquivo JSON (data/db.json)
   src/seed.js      # dados de exemplo da primeira execução
 ```

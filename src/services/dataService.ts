@@ -5,6 +5,7 @@ import {
   SessaoPomodoro,
   ItemRevisao,
   NivelLembranca,
+  ResultadoResumo,
   SnapshotDados,
 } from '@/types';
 import { api, ErroApi } from '@/services/api';
@@ -219,6 +220,23 @@ export async function avaliarItemRevisao(id: string, nivel: NivelLembranca): Pro
 
 export async function registrarSessaoConcluida(sessao: Omit<SessaoPomodoro, 'id'>): Promise<void> {
   await chamar(api.post<ComDados>('/sessoes', sessao));
+}
+
+// O backend consulta a Wikipédia (até 2 chamadas, ~4 s cada), por isso o tempo limite é maior.
+const TEMPO_LIMITE_RESUMO_MS = 15000;
+
+/** CONSULTA (GET): busca o resumo de um tema na Wikipédia, via backend. Não altera dados. */
+export async function consultarResumoTema(tema: string): Promise<ResultadoResumo> {
+  return api.get<ResultadoResumo>(`/resumo?tema=${encodeURIComponent(tema)}`, TEMPO_LIMITE_RESUMO_MS);
+}
+
+/** ATUALIZAÇÃO (PUT): guarda no item o resumo escolhido; `null` remove o resumo salvo. */
+export async function salvarResumoNoItem(
+  itemId: string,
+  resumo: { titulo: string; texto: string; url: string } | null
+): Promise<ItemRevisao> {
+  const r = await chamar(api.put<{ item: ItemRevisao } & ComDados>(`/itens-revisao/${itemId}/resumo`, { resumo }));
+  return r.item;
 }
 
 /** Apaga TODOS os dados no servidor. */

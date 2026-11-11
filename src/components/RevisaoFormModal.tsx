@@ -8,6 +8,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, spacing, type } from '@/theme';
@@ -25,6 +26,8 @@ interface Props {
   erro?: string | null;
   /** Enquanto a operação está em andamento no servidor. */
   salvando?: boolean;
+  /** Conteúdo extra exibido antes dos botões (ex.: resumo da Wikipédia). */
+  extra?: React.ReactNode;
 }
 
 const opcoesQuando = [
@@ -42,6 +45,7 @@ export function RevisaoFormModal({
   onExcluir,
   erro = null,
   salvando = false,
+  extra = null,
 }: Props) {
   const [tema, setTema] = useState(temaInicial);
   const [dias, setDias] = useState(0);
@@ -97,62 +101,66 @@ export function RevisaoFormModal({
             </Pressable>
           </View>
 
-          <Text style={styles.rotulo}>Tema estudado</Text>
-          <TextInput
-            value={tema}
-            onChangeText={setTema}
-            onBlur={() => setTocado(true)}
-            placeholder="Ex: Equações do 2º grau"
-            placeholderTextColor={colors.inkFaint}
-            accessibilityLabel="Tema estudado"
-            style={[styles.input, mostrarErro && styles.inputErro]}
-          />
-          <Text style={[styles.ajuda, mostrarErro && styles.ajudaErro]} accessibilityLiveRegion="polite">
-            {mensagemErro ?? 'Aparece na lista de revisões do dia.'}
-          </Text>
-
-          {modo === 'criar' && (
-            <>
-              <Text style={styles.rotulo}>Primeira revisão</Text>
-              <View style={styles.chipsRow}>
-                {opcoesQuando.map((op) => {
-                  const ativo = dias === op.dias;
-                  return (
-                    <Pressable
-                      key={op.dias}
-                      onPress={() => setDias(op.dias)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Primeira revisão: ${op.label}`}
-                      accessibilityState={{ selected: ativo }}
-                      style={({ pressed }) => [
-                        styles.chip,
-                        ativo && { backgroundColor: colors.sage, borderColor: colors.sage },
-                        pressed && !ativo && { backgroundColor: colors.paper },
-                      ]}
-                    >
-                      <Text style={[styles.chipLabel, ativo && { color: colors.white }]}>{op.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </>
-          )}
-
-          <BotaoPrimario
-            label={modo === 'criar' ? 'Adicionar item' : 'Salvar alterações'}
-            onPress={salvar}
-            loading={salvando}
-            style={styles.salvar}
-          />
-
-          {modo === 'editar' && onExcluir && (
-            <BotaoSecundario
-              label="Excluir item"
-              tone="rust"
-              onPress={onExcluir}
-              style={styles.excluir}
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <Text style={styles.rotulo}>Tema estudado</Text>
+            <TextInput
+              value={tema}
+              onChangeText={setTema}
+              onBlur={() => setTocado(true)}
+              placeholder="Ex: Equações do 2º grau"
+              placeholderTextColor={colors.inkFaint}
+              accessibilityLabel="Tema estudado"
+              style={[styles.input, mostrarErro && styles.inputErro]}
             />
-          )}
+            <Text style={[styles.ajuda, mostrarErro && styles.ajudaErro]} accessibilityLiveRegion="polite">
+              {mensagemErro ?? 'Aparece na lista de revisões do dia.'}
+            </Text>
+
+            {modo === 'criar' && (
+              <>
+                <Text style={styles.rotulo}>Primeira revisão</Text>
+                <View style={styles.chipsRow}>
+                  {opcoesQuando.map((op) => {
+                    const ativo = dias === op.dias;
+                    return (
+                      <Pressable
+                        key={op.dias}
+                        onPress={() => setDias(op.dias)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Primeira revisão: ${op.label}`}
+                        accessibilityState={{ selected: ativo }}
+                        style={({ pressed }) => [
+                          styles.chip,
+                          ativo && { backgroundColor: colors.sage, borderColor: colors.sage },
+                          pressed && !ativo && { backgroundColor: colors.paper },
+                        ]}
+                      >
+                        <Text style={[styles.chipLabel, ativo && { color: colors.white }]}>{op.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {extra}
+
+            <BotaoPrimario
+              label={modo === 'criar' ? 'Adicionar item' : 'Salvar alterações'}
+              onPress={salvar}
+              loading={salvando}
+              style={styles.salvar}
+            />
+
+            {modo === 'editar' && onExcluir && (
+              <BotaoSecundario
+                label="Excluir item"
+                tone="rust"
+                onPress={onExcluir}
+                style={styles.excluir}
+              />
+            )}
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -171,6 +179,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     padding: spacing.lg,
     paddingBottom: spacing.xl,
+    maxHeight: '92%',
   },
   alcinha: {
     width: 40,

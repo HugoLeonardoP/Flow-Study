@@ -29,11 +29,17 @@ export function mensagemDeErro(erro: unknown): string {
   return 'Algo deu errado. Tente novamente.';
 }
 
-async function requisitar<T>(metodo: string, caminho: string, corpo?: unknown): Promise<T> {
+async function requisitar<T>(
+  metodo: string,
+  caminho: string,
+  corpo?: unknown,
+  tempoLimiteMs: number = TEMPO_LIMITE_MS
+): Promise<T> {
   // O app informa o "hoje" no fuso do usuário; o servidor usa isso nas regras de data.
-  const url = `${API_URL}/api${caminho}?hoje=${hojeISO()}`;
+  const separador = caminho.includes('?') ? '&' : '?';
+  const url = `${API_URL}/api${caminho}${separador}hoje=${hojeISO()}`;
   const controle = new AbortController();
-  const timer = setTimeout(() => controle.abort(), TEMPO_LIMITE_MS);
+  const timer = setTimeout(() => controle.abort(), tempoLimiteMs);
 
   let resposta: Response;
   try {
@@ -69,7 +75,8 @@ async function requisitar<T>(metodo: string, caminho: string, corpo?: unknown): 
 }
 
 export const api = {
-  get: <T>(caminho: string) => requisitar<T>('GET', caminho),
+  get: <T>(caminho: string, tempoLimiteMs?: number) =>
+    requisitar<T>('GET', caminho, undefined, tempoLimiteMs),
   post: <T>(caminho: string, corpo?: unknown) => requisitar<T>('POST', caminho, corpo ?? {}),
   put: <T>(caminho: string, corpo: unknown) => requisitar<T>('PUT', caminho, corpo),
   del: <T>(caminho: string) => requisitar<T>('DELETE', caminho),

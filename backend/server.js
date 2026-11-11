@@ -3,6 +3,7 @@ const express = require('express');
 const os = require('os');
 const banco = require('./src/db');
 const R = require('./src/regras');
+const Wikipedia = require('./src/wikipedia');
 
 const PORTA = Number(process.env.PORT) || 3000;
 const db = banco.carregar();
@@ -99,6 +100,26 @@ app.delete('/api/itens-revisao/:id', (req, res) => {
 
 app.post('/api/itens-revisao/:id/avaliacao', (req, res) => {
   const item = R.avaliarItem(db, req.params.id, corpo(req).nivel, req.hoje);
+  responder(req, res, 200, { item });
+});
+
+// Resumo do tema (consulta ao serviço externo: Wikipédia). Não altera dados.
+app.get('/api/resumo', async (req, res, next) => {
+  try {
+    const tema = R.validarTema(typeof req.query.tema === 'string' ? req.query.tema : '');
+    res.json(await Wikipedia.buscarResumo(tema));
+  } catch (erro) {
+    next(erro);
+  }
+});
+
+// Salva (ou remove, com `{ "resumo": null }`) o resumo da Wikipédia de um item.
+app.put('/api/itens-revisao/:id/resumo', (req, res) => {
+  const item = db.itensRevisao.find((r) => r.id === req.params.id);
+  if (!item) throw new R.ErroNegocio(404, 'Item de revisão não encontrado.');
+  const resumo = R.validarResumoSalvo(corpo(req).resumo === undefined ? {} : corpo(req).resumo);
+  if (resumo === null) delete item.resumo;
+  else item.resumo = resumo;
   responder(req, res, 200, { item });
 });
 
