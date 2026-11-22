@@ -1,130 +1,59 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, useWindowDimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { HomeStackParamList } from '@/navigation/AppNavigator';
 import { TimerCircular } from '@/components/TimerCircular';
-import { BotaoPrimario } from '@/components/BotaoPrimario';
 import { BotaoSecundario } from '@/components/BotaoSecundario';
 import { colors, fontFamilies, spacing, type } from '@/theme';
-import { getMateriaById, registrarSessaoConcluida } from '@/services/dataService';
-import { mensagemDeErro } from '@/services/api';
-import { mostrarFeedback } from '@/services/feedback';
-import { hojeISO } from '@/utils/datas';
-import { TipoCiclo } from '@/types';
+import { DURACAO_MS, usePomodoroStore } from '@/store/usePomodoroStore';
+import { useEstudosStore } from '@/store/useEstudosStore';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Pomodoro'>;
 
-const DURACAO_FOCO_SEG = 25 * 60;
-const DURACAO_DESCANSO_SEG = 5 * 60;
-
-function formatarTempo(segundos: number): string {
-  const m = Math.floor(segundos / 60)
-    .toString()
-    .padStart(2, '0');
-  const s = Math.floor(segundos % 60)
-    .toString()
-    .padStart(2, '0');
+function formatarTempo(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = String(Math.floor(total / 60)).padStart(2, '0');
+  const s = String(total % 60).padStart(2, '0');
   return `${m}:${s}`;
 }
 
 export function PomodoroScreen({ route, navigation }: Props) {
-  const materiaId = route.params?.materiaId;
-  const materia = getMateriaById(materiaId);
   const { width } = useWindowDimensions();
   const timerSize = Math.min(width - spacing.lg * 4, 280);
 
-  const [tipo, setTipo] = useState<TipoCiclo>('foco');
-  const [restanteSeg, setRestanteSeg] = useState(DURACAO_FOCO_SEG);
-  const [rodando, setRodando] = useState(false);
-  const [ciclosConcluidos, setCiclosConcluidos] = useState(0);
+  // Estado do timer vem da store global (seletores: só re-renderiza o que mudou).
+  const fase = usePomodoroStore((s) => s.fase);
+  const materiaId = usePomodoroStore((s) => s.materiaId);
+  const fimEm = usePomodoroStore((s) => s.fimEm);
+  const restanteMs = usePomodoroStore((s) => s.restanteMs);
+  const ciclosConcluidos = usePomodoroStore((s) => s.ciclosConcluidos);
+  const preparar = usePomodoroStore((s) => s.preparar);
+  const alternar = usePomodoroStore((s) => s.alternar);
+  const pular = usePomodoroStore((s) => s.pular);
+  const encerrar = usePomodoroStore((s) => s.encerrar);
+  const materia = useEstudosStore((s) => s.dados.materias.find((m) => m.id === materiaId));
 
-  const duracaoTotal = tipo === 'foco' ? DURACAO_FOCO_SEG : DURACAO_DESCANSO_SEG;
-  const progresso = 1 - restanteSeg / duracaoTotal;
-
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
+  // Ao abrir: prepara um ciclo de foco, a menos que já haja um em andamento.
   useEffect(() => {
-    if (rodando) {
-      intervalRef.current = setInterval(() => {
-        setRestanteSeg((atual) => {
-          if (atual <= 1) {
-            finalizarCiclo();
-            return 0;
-          }
-          return atual - 1;
-        });
-      }, 1000);
-    } else if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rodando, tipo]);
+    preparar(route.params?.materiaId ?? null);
+  }, [preparar, route.params?.materiaId]);
 
-  function finalizarCiclo() {
-    setRodando(false);
+  // Só um "relógio de tela" para redesenhar; o tempo em si vem de fimEm - Date.now().
+  const [agora, setAgora] = useState(Date.now());
+  useEffect(() => {
+    if (fimEm === null) return;
+    setAgora(Date.now());
+    const timer = setInterval(() => setAgora(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, [fimEm]);
 
-    // O servidor valida e guarda a sessão; o app só informa o resultado.
-    registrarSessaoConcluida({
-      materiaId: materiaId ?? null,
-      inicio: new Date().toISOString(),
-      dia: hojeISO(),
-      duracaoMin: duracaoTotal / 60,
-      tipo,
-      concluida: true,
-    })
-      .then(() => mostrarFeedback(tipo === 'foco' ? 'Sessão de foco registrada.' : 'Descanso registrado.'))
-      .catch((erro) => mostrarFeedback(mensagemDeErro(erro), 'erro'));
-
-    if (tipo === 'foco') {
-      setCiclosConcluidos((c) => c + 1);
-      Alert.alert('Ciclo de foco concluído!', 'Hora de descansar um pouco.', [
-        {
-          text: 'Iniciar descanso',
-          onPress: () => {
-            setTipo('descanso');
-            setRestanteSeg(DURACAO_DESCANSO_SEG);
-            setRodando(true);
-          },
-        },
-      ]);
-    } else {
-      Alert.alert('Descanso concluído', 'O que você quer fazer agora?', [
-        {
-          text: 'Novo ciclo de foco',
-          onPress: () => {
-            setTipo('foco');
-            setRestanteSeg(DURACAO_FOCO_SEG);
-            setRodando(true);
-          },
-        },
-        {
-          text: 'Voltar para a Home',
-          style: 'cancel',
-          onPress: () => navigation.popToTop(),
-        },
-      ]);
-    }
-  }
-
-  function alternarPlayPausa() {
-    setRodando((r) => !r);
-  }
-
-  function pularCiclo() {
-    setRodando(false);
-    if (tipo === 'foco') {
-      setTipo('descanso');
-      setRestanteSeg(DURACAO_DESCANSO_SEG);
-    } else {
-      setTipo('foco');
-      setRestanteSeg(DURACAO_FOCO_SEG);
-    }
-  }
+  const tipo = fase === 'descanso' ? 'descanso' : 'foco';
+  const duracao = DURACAO_MS[tipo];
+  const restante = fimEm !== null ? Math.max(0, fimEm - agora) : restanteMs ?? duracao;
+  const progresso = 1 - restante / duracao;
+  const rodando = fimEm !== null;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -140,7 +69,7 @@ export function PomodoroScreen({ route, navigation }: Props) {
           )}
         </View>
 
-        <TimerCircular progresso={progresso} tempoLabel={formatarTempo(restanteSeg)} tipo={tipo} size={timerSize} />
+        <TimerCircular progresso={progresso} tempoLabel={formatarTempo(restante)} tipo={tipo} size={timerSize} />
 
         <View style={styles.ciclosWrap}>
           <Ionicons name="checkmark-done-outline" size={16} color={colors.inkFaint} />
@@ -151,7 +80,7 @@ export function PomodoroScreen({ route, navigation }: Props) {
 
         <View style={styles.controles}>
           <Pressable
-            onPress={pularCiclo}
+            onPress={pular}
             accessibilityRole="button"
             accessibilityLabel="Pular ciclo"
             style={({ pressed }) => [styles.controleSecundario, pressed && styles.controleSecundarioPressed]}
@@ -160,7 +89,7 @@ export function PomodoroScreen({ route, navigation }: Props) {
           </Pressable>
 
           <Pressable
-            onPress={alternarPlayPausa}
+            onPress={alternar}
             accessibilityRole="button"
             accessibilityLabel={rodando ? 'Pausar' : 'Iniciar'}
             style={({ pressed }) => [styles.controlePrincipal, pressed && styles.controlePrincipalPressed]}
@@ -171,7 +100,14 @@ export function PomodoroScreen({ route, navigation }: Props) {
           <View style={{ width: 48 }} />
         </View>
 
-        <BotaoSecundario label="Encerrar sessão" tone="rust" onPress={() => navigation.goBack()} />
+        <BotaoSecundario
+          label="Encerrar sessão"
+          tone="rust"
+          onPress={() => {
+            encerrar();
+            navigation.goBack();
+          }}
+        />
       </View>
     </SafeAreaView>
   );

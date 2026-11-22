@@ -53,6 +53,8 @@ export interface ItemRevisao {
   ultimaAvaliacao?: NivelLembranca;
   ultimaAvaliacaoEm?: string; // yyyy-mm-dd (dia local) da última autoavaliação
   resumo?: ResumoSalvo; // resumo da Wikipédia guardado no item (opcional)
+  feita?: boolean; // revisão gerada por sessão já concluída
+  origemSessaoId?: string; // presente nas revisões geradas automaticamente por uma sessão
   criadoEm: string; // yyyy-mm-dd
 }
 

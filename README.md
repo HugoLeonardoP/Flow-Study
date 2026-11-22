@@ -17,6 +17,10 @@ Não há autenticação (um único usuário) nem sincronização em nuvem.
 
 - Matérias, itens de revisão e sessões Pomodoro (criar, editar, excluir).
 - Autoavaliação com reagendamento da próxima revisão e estatísticas.
+- **Timer Pomodoro global** (Zustand): continua correto ao trocar de tela ou minimizar
+  o app, aparece como faixa na Home e, ao fim de um ciclo de foco, registra a sessão —
+  o servidor agenda **3 revisões (1, 7 e 30 dias depois)**.
+- **Notificações locais**: aviso no fim do ciclo e lembrete diário (09:00) das revisões.
 - **Resumo do tema pela Wikipédia**: no Detalhe da matéria, toque em um item de
   revisão → bloco "Resumo na Wikipédia" → **Buscar resumo**. Mostra carregando,
   resultado, "sem resultado" ou erro, e permite **salvar o resumo no item**.
@@ -30,6 +34,9 @@ Não há autenticação (um único usuário) nem sincronização em nuvem.
   tela, feedback visual, decisões de UX e medidas de acessibilidade
   implementadas (contraste de cor, áreas de toque, rótulos para leitor de
   tela, tratamento da barra de navegação do sistema).
+- **`docs/etapa-07.md`** — estado global com Zustand (timer e dados de estudo) e
+  notificações locais (fim do ciclo e lembretes de revisão): estados, permissões,
+  fluxo, tratamento de falhas e roteiro de teste.
 - **`docs/etapa-06.md`** — integração com a API da Wikipédia: endpoints,
   métodos HTTP, estrutura dos dados, fluxo, estados (carregando, sucesso, erro,
   ausência de dados), configuração e roteiro de teste.
@@ -56,7 +63,7 @@ npm start          # mostra: → no celular, use: http://SEU_IP:3000
 
 ```bash
 npm install
-npx expo install @react-native-async-storage/async-storage   # cache local (se ainda não instalou)
+npx expo install zustand expo-notifications @react-native-async-storage/async-storage
 npm install -D babel-preset-expo@~57.0.16                    # exigido pelo babel.config.js
 npx expo start -c
 ```
@@ -98,8 +105,8 @@ src/
   navigation/      # Bottom Tabs (Início/Revisões/Estatísticas) + Stack aninhada em Início
   theme/           # cores, tipografia, espaçamento
   types/           # Materia, SessaoPomodoro, ItemRevisao, AvaliacaoRevisao, EstatisticaDia
-  services/        # api.ts (cliente HTTP), dataService.ts (dados + cache), feedback.ts (mensagens)
-  storage/         # armazenamento.ts: cache local no AsyncStorage
+  store/           # usePomodoroStore (timer, não persistida), useEstudosStore (dados, persistida)
+  services/        # api.ts (HTTP), dataService.ts (leituras/CRUD), notificacoes.ts, feedback.ts
   utils/           # datas.ts: datas no fuso local
   config.ts        # endereço do backend
 backend/

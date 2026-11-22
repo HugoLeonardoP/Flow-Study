@@ -17,7 +17,9 @@ import {
 } from '@expo-google-fonts/inter';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { FeedbackHost } from '@/components/FeedbackHost';
+import { ServicosGlobais } from '@/components/ServicosGlobais';
 import { iniciarDados } from '@/services/dataService';
+import { prepararNotificacoes } from '@/services/notificacoes';
 import { colors } from '@/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -40,6 +42,7 @@ export default function App() {
   // (ou grava os dados de exemplo na primeira execução) antes de mostrar a UI.
   const [dadosCarregados, setDadosCarregados] = useState(false);
   useEffect(() => {
+    void prepararNotificacoes();
     iniciarDados().finally(() => setDadosCarregados(true));
   }, []);
 
@@ -60,6 +63,7 @@ export default function App() {
       <View style={{ flex: 1, backgroundColor: colors.paper }} onLayout={onLayoutRootView}>
         <StatusBar style="dark" />
         <AppNavigator />
+        <ServicosGlobais />
         <FeedbackHost />
       </View>
     </SafeAreaProvider>

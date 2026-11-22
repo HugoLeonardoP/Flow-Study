@@ -8,6 +8,8 @@ const CATEGORIAS = ['Exatas', 'Humanas', 'Biológicas', 'Idiomas', 'Concurso', '
 const NIVEIS = ['nao_lembrei', 'dificil', 'facil'];
 // Simulação do SM-2 (NÃO é o algoritmo real): dias até a próxima revisão por nível.
 const DIAS_POR_NIVEL = { nao_lembrei: 1, dificil: 3, facil: 6 };
+// Cada sessão de foco concluída gera 3 revisões, 1, 7 e 30 dias depois.
+const INTERVALOS_REVISAO_SESSAO = [1, 7, 30];
 const REGEX_DIA = /^\d{4}-\d{2}-\d{2}$/;
 const REGEX_COR = /^#[0-9A-Fa-f]{6}$/;
 
@@ -118,6 +120,28 @@ function validarResumoSalvo(valor) {
 }
 
 // --------------------------------------------------------------- operações
+// Gera as revisões automáticas de uma sessão de foco concluída (só com matéria).
+function gerarRevisoesDaSessao(db, sessao, hoje) {
+  if (sessao.tipo !== 'foco' || !sessao.concluida || !sessao.materiaId) return [];
+  const materia = db.materias.find((m) => m.id === sessao.materiaId);
+  if (!materia) return [];
+  const [, mes, dia] = sessao.dia.split('-');
+  const novos = INTERVALOS_REVISAO_SESSAO.map((dias) => ({
+    id: gerarId('rev'),
+    materiaId: materia.id,
+    tema: `Revisão de ${materia.nome} — estudo de ${dia}/${mes}`,
+    dataAgendada: somarDias(sessao.dia, dias),
+    intervaloAtualDias: dias,
+    fatorFacilidade: 2.5,
+    repeticoes: 0,
+    criadoEm: hoje,
+    origemSessaoId: sessao.id,
+    feita: false,
+  }));
+  db.itensRevisao.unshift(...novos);
+  return novos;
+}
+
 function removerMateriaEmCascata(db, id) {
   db.materias = db.materias.filter((m) => m.id !== id);
   db.sessoes = db.sessoes.filter((s) => s.materiaId !== id);
@@ -134,14 +158,20 @@ function avaliarItem(db, id, nivel, hoje) {
   if (!NIVEIS.includes(nivel)) throw new ErroNegocio(400, 'Dados inválidos.', { nivel: 'Nível inválido.' });
   const item = db.itensRevisao.find((r) => r.id === id);
   if (!item) throw new ErroNegocio(404, 'Item de revisão não encontrado.');
+  if (item.feita) throw new ErroNegocio(409, 'Esta revisão já foi concluída.');
   if (item.ultimaAvaliacaoEm === hoje) throw new ErroNegocio(409, 'Este item já foi avaliado hoje.');
 
-  const dias = DIAS_POR_NIVEL[nivel];
   item.ultimaAvaliacao = nivel;
   item.ultimaAvaliacaoEm = hoje;
-  item.intervaloAtualDias = dias;
-  item.repeticoes = nivel === 'nao_lembrei' ? 0 : item.repeticoes + 1;
-  item.dataAgendada = somarDias(hoje, dias);
+  if (item.origemSessaoId) {
+    // Revisão gerada por uma sessão: o cronograma (1/7/30 dias) é fixo; avaliar = concluir.
+    item.feita = true;
+  } else {
+    const dias = DIAS_POR_NIVEL[nivel];
+    item.intervaloAtualDias = dias;
+    item.repeticoes = nivel === 'nao_lembrei' ? 0 : item.repeticoes + 1;
+    item.dataAgendada = somarDias(hoje, dias);
+  }
 
   db.avaliacoes.unshift({
     id: gerarId('ava'),
@@ -166,7 +196,7 @@ function minutosDeFoco(db, dia) {
 
 function montarSnapshot(db, hoje) {
   const doDia = db.itensRevisao
-    .filter((r) => r.dataAgendada <= hoje && r.ultimaAvaliacaoEm !== hoje)
+    .filter((r) => !r.feita && r.dataAgendada <= hoje && r.ultimaAvaliacaoEm !== hoje)
     .sort(porDataAgendada);
 
   const estatisticasSemana = [];
@@ -214,6 +244,7 @@ module.exports = {
   exigirMateria,
   removerMateriaEmCascata,
   removerItemEmCascata,
+  gerarRevisoesDaSessao,
   avaliarItem,
   montarSnapshot,
 };

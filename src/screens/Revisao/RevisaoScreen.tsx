@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,21 +6,27 @@ import { ItemRevisaoCard } from '@/components/ItemRevisaoCard';
 import { AvisoConexao } from '@/components/AvisoConexao';
 import { mensagemDeErro } from '@/services/api';
 import { mostrarFeedback } from '@/services/feedback';
-import { formatarDataCurta } from '@/utils/datas';
+import { formatarDataCurta, hojeISO } from '@/utils/datas';
 import { colors, fontFamilies, spacing, type } from '@/theme';
-import { useDados, getRevisoesDoDia, avaliarItemRevisao, getMateriaById } from '@/services/dataService';
+import { pendentesDe, useEstudosStore } from '@/store/useEstudosStore';
 import { NivelLembranca } from '@/types';
 
 export function RevisaoScreen() {
-  // Re-renderiza sempre que os dados persistidos mudam (inclusive após avaliar).
-  useDados();
-  const itens = getRevisoesDoDia();
+  // Seletores: a tela só re-renderiza quando as revisões ou as matérias mudam.
+  const itensRevisao = useEstudosStore((s) => s.dados.itensRevisao);
+  const materias = useEstudosStore((s) => s.dados.materias);
+  const concluirRevisao = useEstudosStore((s) => s.concluirRevisao);
+  const itens = useMemo(() => pendentesDe(itensRevisao, hojeISO()), [itensRevisao]);
 
-  // O servidor registra a avaliação e decide a próxima data; o app mostra o resultado.
+  // Concluir = autoavaliar (3 níveis). O servidor registra e decide o que acontece depois.
   async function handleAvaliar(id: string, nivel: NivelLembranca) {
     try {
-      const item = await avaliarItemRevisao(id, nivel);
-      mostrarFeedback(`Revisão registrada. Próxima revisão: ${formatarDataCurta(item.dataAgendada)}.`);
+      const item = await concluirRevisao(id, nivel);
+      mostrarFeedback(
+        item.feita
+          ? 'Revisão concluída.'
+          : `Revisão registrada. Próxima revisão: ${formatarDataCurta(item.dataAgendada)}.`
+      );
     } catch (erro) {
       mostrarFeedback(mensagemDeErro(erro), 'erro');
     }
@@ -43,7 +49,7 @@ export function RevisaoScreen() {
         contentContainerStyle={styles.lista}
         ListHeaderComponent={<AvisoConexao />}
         renderItem={({ item }) => (
-          <ItemRevisaoCard item={item} materia={getMateriaById(item.materiaId)} onAvaliar={handleAvaliar} />
+          <ItemRevisaoCard item={item} materia={materias.find((m) => m.id === item.materiaId)} onAvaliar={handleAvaliar} />
         )}
         ListEmptyComponent={
           <View style={styles.vazio}>

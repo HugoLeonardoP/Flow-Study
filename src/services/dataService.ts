@@ -1,159 +1,73 @@
-import { useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
-import {
-  Materia,
-  SessaoPomodoro,
-  ItemRevisao,
-  NivelLembranca,
-  ResultadoResumo,
-  SnapshotDados,
-} from '@/types';
-import { api, ErroApi } from '@/services/api';
-import { CHAVES, lerJSON, salvarJSON } from '@/storage/armazenamento';
+import { Materia, SessaoPomodoro, ItemRevisao, ResultadoResumo } from '@/types';
+import { api } from '@/services/api';
 import { hojeISO } from '@/utils/datas';
+import { chamar, ComDados, pendentesDe, StatusConexao, useEstudosStore } from '@/store/useEstudosStore';
 
 // ===========================================================================
 // Serviço de dados do app (cliente do backend).
 //
-// Divisão de responsabilidades:
-//  • BACKEND: guarda os dados, valida entradas, aplica regras de negócio
-//    (cascata de exclusões, reagendamento de revisões, resumo e estatísticas).
-//  • APP (este arquivo): envia as ações do usuário ao servidor, guarda em
-//    memória a última cópia recebida e a replica em cache local (AsyncStorage)
-//    para abrir rápido e mostrar os últimos dados quando estiver sem conexão.
-//
-// Toda alteração exige conexão: o servidor responde com o estado atualizado e
-// o app o substitui por inteiro. As telas leem os dados daqui e se inscrevem
-// com `useDados()`.
+//  • BACKEND: guarda os dados, valida entradas e aplica as regras de negócio.
+//  • useEstudosStore (src/store): guarda em memória a última cópia recebida e a
+//    persiste no aparelho (cache para abrir rápido e ler sem conexão).
+//  • Este arquivo: leituras simples sobre essa cópia + alterações (CRUD) que
+//    passam pelo servidor. Registrar sessão e concluir revisão ficam na store.
 // ===========================================================================
 
-const DADOS_VAZIOS: SnapshotDados = {
-  materias: [],
-  sessoes: [],
-  itensRevisao: [],
-  avaliacoes: [],
-  derivados: {
-    resumoDoDia: { minutosEstudadosHoje: 0, revisoesPendentesHoje: 0 },
-    revisoesDoDiaIds: [],
-    estatisticasSemana: [],
-    taxaLembranca: { facil: 0, dificil: 0, naoLembrei: 0, total: 0 },
-    totais: { materias: 0, sessoesFoco: 0, minutosFoco: 0, itensRevisao: 0, avaliacoes: 0 },
-  },
-};
+export type { StatusConexao };
 
-export type StatusConexao = 'conectando' | 'online' | 'offline';
-
-let dados: SnapshotDados = DADOS_VAZIOS;
-let status: StatusConexao = 'conectando';
-let versao = 0;
-let iniciado = false;
-
-// ---------------------------------------------------------------- reatividade
-const ouvintes = new Set<() => void>();
-
-function inscrever(ouvinte: () => void): () => void {
-  ouvintes.add(ouvinte);
-  return () => {
-    ouvintes.delete(ouvinte);
-  };
-}
-
-function notificar() {
-  versao += 1;
-  ouvintes.forEach((o) => o());
-}
+const estado = () => useEstudosStore.getState().dados;
 
 /** Chame no topo de toda tela que exibe dados: ela re-renderiza quando os dados mudam. */
-export function useDados(): number {
-  return useSyncExternalStore(inscrever, () => versao);
+export function useDados() {
+  return useEstudosStore((s) => s.dados);
 }
 
-// ------------------------------------------------------------- sincronização
-function aplicar(novos: SnapshotDados) {
-  dados = novos;
-  status = 'online';
-  notificar();
-  salvarJSON(CHAVES.cache, novos).catch((erro) =>
-    console.warn('[FlowStudy] Falha ao gravar o cache local:', erro)
-  );
-}
-
-/** Busca no servidor o estado atual. Em caso de falha, mantém os dados em cache e marca "offline". */
-export async function sincronizar(): Promise<void> {
-  if (status !== 'online') {
-    status = 'conectando';
-    notificar();
-  }
-  try {
-    const resposta = await api.get<{ dados: SnapshotDados }>('/dados');
-    aplicar(resposta.dados);
-  } catch {
-    status = 'offline';
-    notificar();
-  }
-}
-
-/** Chamada ao abrir o app: carrega o cache local e sincroniza com o servidor em segundo plano. */
+/** Chamada ao abrir o app: aguarda a cópia salva no aparelho e sincroniza com o servidor em segundo plano. */
 export async function iniciarDados(): Promise<void> {
-  if (iniciado) return;
-  iniciado = true;
-
-  try {
-    const cache = await lerJSON<SnapshotDados>(CHAVES.cache);
-    if (cache && Array.isArray(cache.materias) && cache.derivados) dados = cache;
-  } catch (erro) {
-    console.warn('[FlowStudy] Cache local indisponível:', erro);
+  if (!useEstudosStore.persist.hasHydrated()) {
+    await new Promise<void>((resolver) => {
+      const parar = useEstudosStore.persist.onFinishHydration(() => {
+        parar();
+        resolver();
+      });
+    });
   }
-  notificar();
-
   void sincronizar();
   // Ao voltar para o app, atualiza (ex.: virou o dia ou os dados mudaram no servidor).
-  AppState.addEventListener('change', (estado) => {
-    if (estado === 'active') void sincronizar();
+  AppState.addEventListener('change', (s) => {
+    if (s === 'active') void sincronizar();
   });
 }
 
-export function getStatusConexao(): StatusConexao {
-  return status;
+export function sincronizar(): Promise<void> {
+  return useEstudosStore.getState().sincronizar();
 }
 
-type ComDados = { dados: SnapshotDados };
-
-/** Executa uma alteração no servidor e, se der certo, adota o estado devolvido por ele. */
-async function chamar<T extends ComDados>(requisicao: Promise<T>): Promise<T> {
-  try {
-    const resposta = await requisicao;
-    aplicar(resposta.dados);
-    return resposta;
-  } catch (erro) {
-    if (erro instanceof ErroApi && erro.semConexao) {
-      status = 'offline';
-      notificar();
-    }
-    throw erro;
-  }
+export function getStatusConexao(): StatusConexao {
+  return useEstudosStore.getState().status;
 }
 
 // ===========================================================================
-// LEITURA (a partir da última cópia recebida)
+// LEITURA
 // ===========================================================================
 export function listarMaterias(): Materia[] {
-  return dados.materias;
+  return estado().materias;
 }
 
 export function getMateriaById(id: string | null | undefined): Materia | undefined {
-  return dados.materias.find((m) => m.id === id);
+  return estado().materias.find((m) => m.id === id);
 }
 
 export function getHistoricoSessoes(materiaId: string): SessaoPomodoro[] {
-  return dados.sessoes
-    .filter((s) => s.materiaId === materiaId && s.tipo === 'foco')
+  return estado()
+    .sessoes.filter((s) => s.materiaId === materiaId && s.tipo === 'foco')
     .sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime());
 }
 
 export function getRevisoesDaMateria(materiaId: string): ItemRevisao[] {
-  return dados.itensRevisao
-    .filter((r) => r.materiaId === materiaId)
+  return estado()
+    .itensRevisao.filter((r) => r.materiaId === materiaId)
     .sort((a, b) => (a.dataAgendada < b.dataAgendada ? -1 : a.dataAgendada > b.dataAgendada ? 1 : 0));
 }
 
@@ -161,17 +75,14 @@ export function foiAvaliadoHoje(item: ItemRevisao): boolean {
   return item.ultimaAvaliacaoEm === hojeISO();
 }
 
-/** Itens a revisar hoje — a lista é decidida pelo servidor. */
 export function getRevisoesDoDia(): ItemRevisao[] {
-  return dados.derivados.revisoesDoDiaIds
-    .map((id) => dados.itensRevisao.find((r) => r.id === id))
-    .filter((r): r is ItemRevisao => r !== undefined);
+  return pendentesDe(estado().itensRevisao, hojeISO());
 }
 
-export const getResumoDoDia = () => dados.derivados.resumoDoDia;
-export const getEstatisticasSemana = () => dados.derivados.estatisticasSemana;
-export const getTaxaLembranca = () => dados.derivados.taxaLembranca;
-export const getTotaisArmazenados = () => dados.derivados.totais;
+export const getResumoDoDia = () => estado().derivados.resumoDoDia;
+export const getEstatisticasSemana = () => estado().derivados.estatisticasSemana;
+export const getTaxaLembranca = () => estado().derivados.taxaLembranca;
+export const getTotaisArmazenados = () => estado().derivados.totais;
 
 // ===========================================================================
 // ALTERAÇÕES (todas passam pelo servidor)
@@ -210,16 +121,6 @@ export async function atualizarTemaItemRevisao(id: string, tema: string): Promis
 
 export async function removerItemRevisao(id: string): Promise<void> {
   await chamar(api.del<ComDados>(`/itens-revisao/${id}`));
-}
-
-/** O servidor registra a avaliação e calcula a próxima data de revisão (devolvida no item). */
-export async function avaliarItemRevisao(id: string, nivel: NivelLembranca): Promise<ItemRevisao> {
-  const r = await chamar(api.post<{ item: ItemRevisao } & ComDados>(`/itens-revisao/${id}/avaliacao`, { nivel }));
-  return r.item;
-}
-
-export async function registrarSessaoConcluida(sessao: Omit<SessaoPomodoro, 'id'>): Promise<void> {
-  await chamar(api.post<ComDados>('/sessoes', sessao));
 }
 
 // O backend consulta a Wikipédia (até 2 chamadas, ~4 s cada), por isso o tempo limite é maior.

@@ -2,12 +2,13 @@ import React from 'react';
 import { Pressable, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, spacing, type } from '@/theme';
-import { getStatusConexao, sincronizar, useDados } from '@/services/dataService';
+import { sincronizar } from '@/services/dataService';
+import { useEstudosStore } from '@/store/useEstudosStore';
 
 // Faixa exibida quando o app não consegue falar com o servidor.
 export function AvisoConexao() {
-  useDados();
-  if (getStatusConexao() !== 'offline') return null;
+  const offline = useEstudosStore((s) => s.status === 'offline');
+  if (!offline) return null;
 
   return (
     <Pressable

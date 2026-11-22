@@ -128,7 +128,9 @@ app.post('/api/sessoes', (req, res) => {
   const v = R.validarNovaSessao(corpo(req), db, req.hoje);
   const sessao = { id: R.gerarId('ses'), ...v };
   db.sessoes.unshift(sessao);
-  responder(req, res, 201, { sessao });
+  // Sessão de foco com matéria → o servidor agenda as 3 revisões (1, 7 e 30 dias).
+  const geradas = R.gerarRevisoesDaSessao(db, sessao, req.hoje);
+  responder(req, res, 201, { sessao, revisoesGeradas: geradas.length });
 });
 
 // ------------------------------------------------------------- erros

@@ -7,6 +7,7 @@ import type { HomeStackParamList } from '@/navigation/AppNavigator';
 import { CardMateria } from '@/components/CardMateria';
 import { BotaoPrimario } from '@/components/BotaoPrimario';
 import { AvisoConexao } from '@/components/AvisoConexao';
+import { PomodoroEmAndamento } from '@/components/PomodoroEmAndamento';
 import { colors, fontFamilies, spacing, type, radius, shadow } from '@/theme';
 import { useDados, listarMaterias, getResumoDoDia } from '@/services/dataService';
 
@@ -27,6 +28,9 @@ export function HomeScreen({ navigation }: Props) {
         ListHeaderComponent={
           <>
             <AvisoConexao />
+            <PomodoroEmAndamento
+              onPress={(materiaId) => navigation.navigate('Pomodoro', materiaId ? { materiaId } : undefined)}
+            />
             <View style={styles.saudacaoWrap}>
               <Text style={styles.saudacaoEyebrow}>Bem-vindo de volta</Text>
               <Text style={styles.saudacao}>Vamos manter o ritmo hoje?</Text>

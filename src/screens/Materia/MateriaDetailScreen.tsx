@@ -229,7 +229,9 @@ export function MateriaDetailScreen({ route, navigation }: Props) {
                   accessibilityLabel="Tem resumo da Wikipédia salvo"
                 />
               ) : null}
-              {foiAvaliadoHoje(r) ? (
+              {r.feita ? (
+                <Badge label="Concluída" tone="sage" />
+              ) : foiAvaliadoHoje(r) ? (
                 <Badge label="Avaliado hoje" tone="sage" />
               ) : (
                 <Badge label={formatarDataCurta(r.dataAgendada)} tone="neutral" />
